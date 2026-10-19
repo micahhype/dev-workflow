@@ -15,12 +15,23 @@
 > More lines are machine-checked, by the plan guard: `- Review rounds:` above 2
 > requires a filled `- Unresolved:`, and the LAST section of a finished feature needs
 > a `- Project map updated:` line and a `- Lessons:` line (both scaffolded in Final
-> review below — when Stage 5 is skipped, add them to the last phase instead). The rest is prose for you
-> and the user; no hook reads it.
+> review below — when Stage 5 is skipped, add them to the last phase instead). A reviewed
+> phase needs a `- Review map:` with `MUST` / `SKIM` / `SKIP` entries, and a phase whose
+> diff outgrew its plan `- Size:` needs a filled `- Over budget:`. The dashboard renders
+> the map, so keep each entry one line: `- TIER `path:start-end` — what it does → what to
+> check`, plus `- ASSUME <decision the spec did not make>`. The rest is prose for you and
+> the user; no hook reads it.
 
 ## Phase 1 — <title>
 - Status: [ ] coded  [ ] code-reviewed  [ ] security-scanned  [ ] USER APPROVED
 - Changed: <files + key decisions>
+- Review map: <N must-read / N skim / N skip of N changed lines>
+  - MUST `<path:start-end>` — <what it does> → <the question the user must answer>
+  - SKIM `<path:start-end>` — <what it does>
+  - SKIP `<path>` — <why it needs no reading>
+  - ASSUME <a decision the code makes that the spec did not>
+- Over budget: <only when the plan guard flags the diff as over its `- Size:`: why it
+  lands as one phase. Leave the placeholder otherwise.>
 - Code review result: <summary of findings + how resolved>
 - Security scan result: <summary>
 - Review rounds: <N/2 — how many fix→re-review rounds this phase took>

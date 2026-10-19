@@ -100,6 +100,20 @@
   .step { color: var(--muted); }
   .step.done { color: var(--done); }
   .step.waiting { color: var(--wait); font-weight: 600; }
+  .review-map { margin: 8px 0; }
+  .map-summary { font-weight: 600; margin: 0 0 4px; }
+  .map-diff { margin: 0 0 6px; color: var(--muted); }
+  .map-diff.over { color: var(--wait); font-weight: 600; }
+  .map-group { margin: 6px 0; }
+  .map-label { font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .map-group.must .map-label, .map-group.assume .map-label { color: var(--wait); }
+  .map-entry { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; margin: 4px 0; overflow-wrap: anywhere; }
+  .map-group.must .map-entry, .map-group.assume .map-entry { border-left-color: var(--wait); }
+  .map-entry code { font-family: ui-monospace, monospace; font-size: 12.5px; }
+  .excerpt { counter-reset: line var(--first-line); white-space: pre; overflow-x: auto; overflow-wrap: normal; }
+  .excerpt span { display: block; }
+  .excerpt span::before { counter-increment: line; content: counter(line); display: inline-block;
+                          width: 4ch; margin-right: 12px; text-align: right; color: var(--muted); }
   details { margin-top: 4px; }
   summary { cursor: pointer; color: var(--muted); }
   .field-empty { color: var(--wait); font-weight: 600; }
@@ -584,6 +598,9 @@ function phaseBlock(phase, segment) {
   const block = el('div', 'phase',
     el('div', 'phase-title', el('span', '', phase.title), phaseTrack([segment])),
     phaseSteps(phase.status || '', segment));
+  const map = reviewMap(phase);
+  if (map && phase.current) block.append(map);
+  else if (map) block.append(detailsBlock(phase.title + ':map', 'Review map', map));
   block.append(detailsBlock(phase.title + ':evidence', 'Evidence', evidenceContent(phase)));
   const notes = el('dl', 'notes',
     el('dt', '', 'Review rounds'), el('dd', '', markdownDoc(phase.review_rounds ?? 'Not recorded')),
@@ -605,6 +622,54 @@ function phaseSteps(statusLine, segment) {
     steps.append(el('span', isTicked ? 'step done' : 'step', (isTicked ? '✓ ' : '') + step.label));
   }
   return steps;
+}
+
+const MAP_TIERS = [
+  { tier: 'MUST', label: 'Must read', className: 'must' },
+  { tier: 'ASSUME', label: 'Assumptions the spec did not make', className: 'assume' },
+  { tier: 'SKIM', label: 'Skim', className: 'skim' },
+  { tier: 'SKIP', label: 'Skip', className: 'skip' },
+];
+
+function reviewMap(phase) {
+  const map = phase.review_map;
+  if (!map || (map.entries.length === 0 && !phase.diff)) return null;
+  const block = el('div', 'review-map');
+  if (map.summary) block.append(el('p', 'map-summary', map.summary));
+  if (phase.diff) block.append(diffLine(phase.diff));
+  if (phase.over_budget && !phase.over_budget.startsWith('<')) {
+    block.append(el('div', 'warning', 'Over budget: ' + phase.over_budget));
+  }
+  for (const { tier, label, className } of MAP_TIERS) {
+    const entries = map.entries.filter((entry) => entry.tier === tier);
+    if (entries.length === 0) continue;
+    const group = el('div', 'map-group ' + className, el('div', 'map-label', label + ' (' + entries.length + ')'));
+    for (const [index, entry] of entries.entries()) group.append(mapEntry(phase, entry, tier + index));
+    block.append(tier === 'SKIP' ? detailsBlock(phase.title + ':skip', 'Skip (' + entries.length + ')', group) : group);
+  }
+  return block;
+}
+
+function diffLine(diff) {
+  const isOver = diff.lines !== null && diff.limit !== null && diff.lines > diff.limit;
+  const measured = diff.lines === null ? 'not measured yet' : diff.lines + ' lines changed';
+  const budget = diff.estimate === null ? '' : ' · plan budget ~' + diff.estimate + ' (limit ' + diff.limit + ')';
+  return el('p', isOver ? 'map-diff over' : 'map-diff', 'Diff: ' + measured + budget);
+}
+
+function mapEntry(phase, entry, key) {
+  const item = el('div', 'map-entry');
+  if (entry.path) {
+    const range = entry.start === null ? '' : ':' + entry.start + (entry.end !== entry.start ? '-' + entry.end : '');
+    item.append(el('code', '', entry.path + range), ' ');
+  }
+  item.append(...inline(entry.text));
+  if (entry.excerpt && entry.excerpt.lines.length > 0) {
+    const code = el('pre', 'excerpt', ...entry.excerpt.lines.map((line) => el('span', '', line)));
+    code.style.setProperty('--first-line', String(entry.excerpt.first - 1));
+    item.append(detailsBlock(phase.title + ':' + key, 'Show code', code));
+  }
+  return item;
 }
 
 function evidenceContent(phase) {

@@ -26,6 +26,10 @@ visible instead of silent. So this gate refuses to let a turn end when:
      last section. The review findings, the user's corrections and the suggestions
      they turned down die with the feature unless someone turns them into rules, and
      the step that does it runs at the one moment everyone wants to be done.
+  6. The current phase is reviewed but has no `- Review map:` — the map is what
+     spares the user reading the whole diff, so it must exist before they approve.
+  7. The current phase's diff outgrew its plan `- Size:` budget and `- Over budget:`
+     does not say why — a diff too big to review is the bottleneck this prevents.
 
 Like the evidence gate, this raises the floor; it cannot judge whether what was
 written is TRUE. "Because it is separate" satisfies (2) — it is the user reading
@@ -41,6 +45,7 @@ import re
 import sys
 
 import _workflow
+import diff_budget
 from _workflow import docs_dir, field_text, is_unfilled, iter_phases, read
 
 # `#{2,3}` because the template writes `### Phase 1 — ...` but a hand-written plan
@@ -49,9 +54,16 @@ PLAN_PHASE = re.compile(r"^#{2,3}[ \t]+Phase\b[^\n]*$", re.MULTILINE | re.IGNORE
 SIZE_HEADING = re.compile(r"^#{2,3}[ \t]+Size estimate[ \t]*$", re.MULTILINE | re.IGNORECASE)
 ANY_HEADING = re.compile(r"^#{1,3}[ \t]+", re.MULTILINE)
 ROUNDS_NUM = re.compile(r"(\d+)")
+PHASE_NUM = re.compile(r"^Phase\s+(\d+)", re.IGNORECASE)
+CODED = re.compile(r"\[[xX]\]\s*coded")
+REVIEWED = re.compile(r"\[[xX]\]\s*code-reviewed")
+# `(?!`?<)`: the template's own example entries are `<placeholders>`, not a map.
+MAP_ENTRY = re.compile(r"^[ \t]*-[ \t]*(?:MUST|SKIM|SKIP)[ \t]+(?!`?<)\S", re.MULTILINE)
 
 MAX_ROUNDS = 2  # keep in step with the review-round budget in skills/feature/SKILL.md
 MAX_BLOCKS = 3
+BUDGET_FACTOR = 2
+BUDGET_SLACK = 40  # lines; a 10-line estimate should not refuse a 25-line phase
 COUNTER_FILE = "plan-guard.json"
 
 # Content that is present but not part of the plan. The template ships a
@@ -183,6 +195,66 @@ def lessons_findings(log):
                 "\"none\" if nothing recurred."]
     return []
 
+def current_phase(log):
+    """(title, body) of the first unapproved `## Phase N` section, or None."""
+    for title, body, approved in iter_phases(log):
+        if not approved:
+            return (title, body) if PHASE_NUM.match(title) else None
+    return None
+
+
+def review_map_findings(log):
+    current = current_phase(log)
+    if current is None:
+        return []
+    title, body = current
+    if not REVIEWED.search(body) or MAP_ENTRY.search(field_text(body, "Review map") or ""):
+        return []
+    return [f"'{title}' is reviewed but has no `- Review map:` with MUST / SKIM / SKIP "
+            "entries. Record code-reviewer's map in phase-log.md and lead the approval "
+            "checkpoint with it: the user reads the MUST hunks, not the whole diff."]
+
+
+def phase_estimates(plan):
+    """{phase number: changed lines} from each plan phase's `- Size:`."""
+    estimates = {}
+    for title, body in iter_plan_phases(strip_noise(plan)):
+        number = PHASE_NUM.match(title)
+        size = field_text(body, "Size")
+        if number and not is_unfilled(size):
+            lines = ROUNDS_NUM.search(size.replace(",", ""))
+            if lines:
+                estimates[int(number.group(1))] = int(lines.group(1))
+    return estimates
+
+
+def budget_limit(estimate):
+    return max(estimate * BUDGET_FACTOR, estimate + BUDGET_SLACK)
+
+
+def diff_budget_findings(root, slug, plan, log):
+    current = current_phase(log)
+    if current is None:
+        return []
+    title, body = current
+    estimate = phase_estimates(plan).get(int(PHASE_NUM.match(title).group(1)))
+    if estimate is None:
+        return []
+    try:
+        lines = diff_budget.measure(root, slug or "", title, bool(CODED.search(body)))
+    except Exception:
+        return []  # git trouble must not trap the turn
+    if lines is None or lines <= budget_limit(estimate):
+        return []
+    reason = field_text(body, "Over budget")
+    if not is_unfilled(reason) and reason.strip().lower() not in ("none", "n/a"):
+        return []
+    return [f"'{title}' has changed {lines} lines; its plan `- Size:` budgeted ~{estimate} "
+            f"(limit {budget_limit(estimate)}). A diff this size is what makes the user's "
+            "review the bottleneck. Split what is left into its own phase (plan.md and "
+            "phase-log.md, with a `- Why separate:`), or, if it must land together, say why "
+            "in this section's `- Over budget:` line and tell the user before they review."]
+
 
 def main():
     try:
@@ -202,6 +274,9 @@ def main():
         findings += budget_findings(log)
         findings += map_findings(log, root)
         findings += lessons_findings(log)
+        findings += review_map_findings(log)
+        if plan:
+            findings += diff_budget_findings(root, slug, plan, log)
 
     key = f"{slug or ''}::plan"
     if not findings:

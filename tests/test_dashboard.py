@@ -125,6 +125,35 @@ def test_collect_reads_features_and_phases_through_the_workflow_parsers(git_repo
     assert dashboard.collect(str(git_repo), "gamma")["phases"][0]["evidence"] == "- a\n- b"
 
 
+def test_the_current_phase_shows_its_review_map_with_the_must_read_code(tmp_path):
+    (tmp_path / "api.py").write_text("".join("line %d\n" % n for n in range(1, 11)))
+    (tmp_path.parent / "secret.txt").write_text("outside\n")
+    review_map = ("- Review map: 3 must-read / 1 skim / 2 skip of 6 changed lines\n"
+                  "  - MUST `api.py:4-6` — default page → is page 1 the first 20?\n"
+                  "  - MUST `../secret.txt:1` — reaches outside the project\n"
+                  "  - SKIM `api.py:9` — wiring\n"
+                  "  - SKIP `tests/test_api.py` — cited as evidence\n"
+                  "  - ASSUME a page holds 20 orders\n")
+    section = phase("Phase 1 — pages", reviewed=True).replace("- Evidence:", review_map + "- Evidence:")
+    write_feature(tmp_path, "pages", section)
+    feature_dir = tmp_path / ".dev-workflow" / "features" / "pages"
+    (feature_dir / "plan.md").write_text("### Phase 1 — pages\n- Scope: pages\n- Size: ~40 lines\n")
+    (tmp_path / ".dev-workflow" / "diff-budget.json").write_text(
+        json.dumps({"pages": {"phase": "Phase 1 — pages", "lines": 130}}))
+
+    current = dashboard.collect(str(tmp_path), "pages")["phases"][0]
+    review = current["review_map"]
+    assert review["summary"] == "3 must-read / 1 skim / 2 skip of 6 changed lines"
+    assert [entry["tier"] for entry in review["entries"]] == ["MUST", "MUST", "SKIM", "SKIP", "ASSUME"]
+    must, outside = review["entries"][:2]
+    assert (must["path"], must["start"], must["end"]) == ("api.py", 4, 6)
+    assert must["text"] == "default page → is page 1 the first 20?"
+    assert must["excerpt"] == {"first": 4, "lines": ["line 4", "line 5", "line 6"]}
+    assert outside["excerpt"] is None
+    assert review["entries"][4]["text"] == "a page holds 20 orders"
+    assert current["diff"] == {"lines": 130, "estimate": 40, "limit": 80}
+
+
 def test_overview_shows_each_live_project_once_waiting_first(tmp_path):
     quiet = tmp_path / "quiet"
     write_feature(quiet, "one", phase("Phase 1 — a"))

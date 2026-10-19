@@ -115,6 +115,25 @@ Return (your final message IS the returned data):
   (style, naming, preference — worth saying, never worth a round). The orchestrator
   bounds the fix loop on those labels, so an unlabelled or inflated finding costs a
   round that a real bug needed.
+- **Review map** — the user approves this phase after you, and the map decides
+  what they actually read. Put EVERY changed hunk in exactly one tier, one line each,
+  in reading order (entry point → core logic → callers):
+  - `MUST `path:start-end` — what it does → the question the user must answer`
+    (a concrete question: "does it refuse an unapproved phase?", not "check logic").
+  - `SKIM `path:start-end` — what it does` — glue and wiring whose shape is enough.
+  - `SKIP `path` — why` — pure renames or formatting, generated or lock files, docs,
+    and tests already cited as evidence that you read and found sound.
+  - `ASSUME <decision>` — every business rule, default, threshold or behaviour the
+    code settles that the brief and `Done when:` do not. Bugs hide here; never omit one.
+  **Floors — these are MUST, whatever their size:** a security-sensitive surface
+  (auth/authz, input parsing, crypto/secrets, queries or deserialization, network /
+  filesystem / subprocess); a new branch or business rule; a write, delete or
+  migration of persistent data; changed error handling or concurrency; a public
+  signature change; code no test exercises; any hunk you raised a finding on. Unsure
+  → the higher tier: a hunk wrongly skipped is a bug the user never saw. Open the map
+  with `N must-read / N skim / N skip of N changed lines`, counted from the diff. If
+  MUST passes ~150 lines, say the phase is too big to review in one sitting.
+  On a RE-REVIEW, map only the fix diff; the orchestrator merges it in.
 - Leave security to the security reviewers; if you spot a security bug, just note
   it briefly for handoff.
 - EVIDENCE, not assertion: pass or fail, cite what you checked — specific

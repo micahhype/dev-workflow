@@ -9,6 +9,7 @@ import pytest
 from conftest import HOOKS, hook_json, run_hook
 
 sys.path.insert(0, HOOKS)
+import diff_budget  # noqa: E402
 import plan_guard  # noqa: E402
 from plan_guard import MAX_BLOCKS  # noqa: E402
 
@@ -16,6 +17,9 @@ TEMPLATES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
                          "templates")
 
 SIZE = "## Size estimate\n2 files, ~25 lines, no new structure.\n\n"
+REVIEW_MAP = ("- Review map: 4 must-read / 0 skim / 10 skip of 14 changed lines\n"
+              "  - MUST `api/orders.py:10-13` — default page → is page 1 the first 20?\n"
+              "  - SKIP `tests/test_orders.py` — cited as evidence\n")
 
 
 def one_phase(scope="add the page param", extra=""):
@@ -148,6 +152,7 @@ def test_placeholder_size_estimate_is_blocked(tmp_path):
 def log_with(rounds, unresolved):
     return ("# Phase log: t\n\n## Phase 1 — do the thing\n"
             "- Status: [x] coded  [x] code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n"
+            + REVIEW_MAP +
             f"- Review rounds: {rounds}\n"
             f"- Unresolved: {unresolved}\n"
             "- Evidence: `pytest -q` -> 53 passed\n"
@@ -181,6 +186,7 @@ def done_log(*, map_line=None, first_map_line=None, lessons="none"):
     def sec(title, extra):
         return (f"## {title}\n"
                 "- Status: [x] coded  [x] code-reviewed  [ ] security-scanned  [x] USER APPROVED\n"
+                + REVIEW_MAP +
                 f"{extra}"
                 "- Evidence: `pytest -q` -> 53 passed\n")
     a = sec("Phase 1 — a", f"- Project map updated: {first_map_line}\n" if first_map_line else "")
@@ -244,6 +250,108 @@ def test_none_is_a_complete_lessons_answer(tmp_path):
 def test_unfinished_feature_is_not_asked_for_lessons(tmp_path):
     log = done_log(lessons=None).replace("[x] USER APPROVED", "[ ] USER APPROVED", 1)
     assert hook_json(stop(tmp_path, log=log)) is None
+
+
+# --- review map -------------------------------------------------------------
+
+def reviewed_log(review_map=REVIEW_MAP, reviewed=True):
+    box = "[x]" if reviewed else "[ ]"
+    return ("# Phase log: t\n\n## Phase 1 — do the thing\n"
+            f"- Status: [x] coded  {box} code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n"
+            + review_map +
+            "- Evidence: `pytest -q` -> 53 passed\n")
+
+
+def test_reviewed_phase_without_a_map_is_blocked(tmp_path):
+    proc = stop(tmp_path, log=reviewed_log(review_map=""))
+    assert blocked(proc) and "Review map" in reason(proc)
+
+
+def test_the_templates_example_entries_are_not_a_map(tmp_path):
+    tpl = open(os.path.join(TEMPLATES, "phase-log.md")).read()
+    template_map = tpl[tpl.index("- Review map:"):tpl.index("- Over budget:")]
+    assert blocked(stop(tmp_path, log=reviewed_log(review_map=template_map)))
+
+
+def test_a_map_with_entries_passes(tmp_path):
+    proc = stop(tmp_path, log=reviewed_log())
+    assert hook_json(proc) is None, reason(proc)
+
+
+def test_a_phase_not_yet_reviewed_needs_no_map(tmp_path):
+    assert hook_json(stop(tmp_path, log=reviewed_log(review_map="", reviewed=False))) is None
+
+
+# --- phase Size against the lines actually changed ---------------------------
+
+def budget_plan(size="~10 lines"):
+    return one_phase().replace("- Verify:", f"- Size: {size}\n- Verify:")
+
+
+def coded_log(coded=True, over_budget=None):
+    box = "[x]" if coded else "[ ]"
+    return ("# Phase log: t\n\n## Phase 1 — do the thing\n"
+            f"- Status: {box} coded  [ ] code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n"
+            + (f"- Over budget: {over_budget}\n" if over_budget else "") +
+            "- Evidence:\n")
+
+
+def grow(repo, lines):
+    (repo / "big.py").write_text("".join(f"x{i} = {i}\n" for i in range(lines)))
+
+
+def test_phase_estimates_reads_each_phases_size():
+    plan = budget_plan("~1,200 lines") + second_phase("own rollback").replace(
+        "- Verify:", "- Size: 30\n- Verify:")
+    assert plan_guard.phase_estimates(plan) == {1: 1200, 2: 30}
+
+
+def test_a_diff_past_its_budget_is_blocked(git_repo):
+    assert hook_json(stop(git_repo, plan=budget_plan(), log=coded_log(coded=False))) is None
+    grow(git_repo, 120)
+    proc = stop(git_repo, plan=budget_plan(), log=coded_log())
+    assert blocked(proc) and "120 lines" in reason(proc) and "limit 50" in reason(proc)
+
+
+def test_a_diff_within_its_budget_passes(git_repo):
+    stop(git_repo, plan=budget_plan(), log=coded_log(coded=False))
+    grow(git_repo, 45)
+    proc = stop(git_repo, plan=budget_plan(), log=coded_log())
+    assert hook_json(proc) is None, reason(proc)
+
+
+def test_over_budget_with_a_reason_passes_but_none_does_not(git_repo):
+    stop(git_repo, plan=budget_plan(), log=coded_log(coded=False))
+    grow(git_repo, 120)
+    assert blocked(stop(git_repo, plan=budget_plan(), log=coded_log(over_budget="none")))
+    proc = stop(git_repo, plan=budget_plan(),
+                log=coded_log(over_budget="the migration and its backfill must land together"))
+    assert hook_json(proc) is None, reason(proc)
+
+
+def test_a_phase_first_seen_already_coded_is_not_measured(git_repo):
+    # Counting from HEAD would charge it with every earlier phase's uncommitted work.
+    grow(git_repo, 500)
+    proc = stop(git_repo, plan=budget_plan(), log=coded_log())
+    assert hook_json(proc) is None, reason(proc)
+
+
+def test_the_next_phase_coded_in_the_approval_turn_starts_from_the_last_stop(git_repo):
+    two = budget_plan() + second_phase("own rollback").replace("- Verify:", "- Size: 10\n- Verify:")
+    first_current = ("# Phase log: t\n\n## Phase 1 — do the thing\n"
+                     "- Status: [x] coded  [ ] code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n"
+                     "- Evidence:\n\n## Phase 2 — the other thing\n"
+                     "- Status: [ ] coded  [ ] code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n")
+    stop(git_repo, plan=two, log=first_current.replace("[x] coded", "[ ] coded", 1))
+    grow(git_repo, 30)
+    assert hook_json(stop(git_repo, plan=two, log=first_current)) is None
+    second_current = (first_current.replace("[ ] USER APPROVED", "[x] USER APPROVED", 1)
+                      .replace("[ ] coded", "[x] coded"))
+    (git_repo / "small.py").write_text("y = 1\n")
+    proc = stop(git_repo, plan=two, log=second_current)
+    assert hook_json(proc) is None, reason(proc)
+    recorded = diff_budget.load(str(git_repo))["f"]
+    assert recorded["phase"] == "Phase 2 — the other thing" and recorded["lines"] == 1
 
 
 # --- bounding, so it cannot trap the turn -----------------------------------

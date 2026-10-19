@@ -355,6 +355,11 @@ Reads, not a subagent.
      per criterion" in Stage 4).
    - **Each phase has a rollback point.** Note where the checkpoint sits so a bad
      phase can be reverted cleanly (ties into the checkpoint/rollback machinery).
+   - **Each phase has a `- Size:` — its diff budget.** Changed lines (added +
+     deleted, tests included). The plan guard measures the phase's real diff at
+     every Stop and refuses past 2× the estimate (min +40 lines) until the phase-log
+     `- Over budget:` says why. An honest number matters more than a small one: it
+     is the user's review load, stated before they agree to it.
    - **Decide the shape before the phases — fill `## Structure`.** Where each
      new file goes, the one responsibility each file has, the main flow from entry
      point to output, and — the part that matters most — the EXISTING feature it is
@@ -433,7 +438,8 @@ For each phase in `plan.md`, in order:
    or for a long one, each changed file with the line ranges of its hunks. Add the
    phase's `Done when:` (the code-reviewer needs it to judge what
    is over-built) and `plan.md`'s `## Structure` (to judge whether the code
-   follows the agreed shape). If the coder returned `Suggested, not built:` items, carry them
+   follows the agreed shape). Ask the code-reviewer for its **review map** (see
+   `agents/code-reviewer.md`) — on a re-review, for the fix diff only. If the coder returned `Suggested, not built:` items, carry them
    to the user at this phase's checkpoint — never build them on your own call.
    Before the reviews, check the diff for files the phase should not leave behind:
    probe/smoke/e2e scripts, backups, `.diff` dumps, handoff notes — in `src/`,
@@ -459,6 +465,14 @@ For each phase in `plan.md`, in order:
      `[x] security-scanned` if the scan ran). "Resolved" means fixed, rebutted with
      evidence you accepted, or decided by the user at escalation — never "we ran out
      of rounds".
+   - Record the **`- Review map:`** in the phase's section: the first round's map,
+     with each re-review's fix-diff entries merged in (a hunk changed by a fix is
+     re-tiered, never left at a lower tier than the fix warrants). Replace the
+     reviewer's line counts in the opening line with `git diff --numstat` totals.
+     Keep the tier labels and one-line entries: the plan guard requires a MUST /
+     SKIM / SKIP entry before you yield, and the dashboard renders them.
+   - If the plan guard reported the diff **over its `- Size:` budget**, split the
+     rest into a new phase or write why it lands together on `- Over budget:`.
    - Record `- Review rounds: N/2`, `- Unresolved:` and `- Deferred nits:` in the
      phase's section (prose lines, not parsed by the hooks — they exist so the user
      can see how contested the phase was, and what was consciously let go, before
@@ -470,7 +484,12 @@ For each phase in `plan.md`, in order:
      Ticking `[x] code-reviewed` arms the
      `Stop`-hook evidence gate: it will refuse to let you yield for approval while
      this line is still empty or a placeholder, and it will keep refusing.
-4. **CHECKPOINT: the user reviews AFTER the AI. Stop and wait.** ONLY after the user
+4. **CHECKPOINT: the user reviews AFTER the AI. Stop and wait.** Lead with the
+   review map, so the user reads 40 lines instead of 400: the totals line, any
+   `- Over budget:` reason, the MUST entries in reading order with their questions,
+   then every ASSUME. SKIM and SKIP go in one line each with counts. Do not paste the
+   diff; the user opens the MUST ranges (or the dashboard shows them). Then the review
+   summary and evidence. ONLY after the user
    has actually approved, tick `[x] USER APPROVED` in `phase-log.md` and move on.
    Never tick it yourself to advance; never advance unapproved.
 5. If it's a git repo and the user wants per-phase commits, commit scoped to this

@@ -12,8 +12,10 @@ any hook's main(); other actions are shown as `!` commands for the user's own sh
 """
 import datetime
 import hmac
+import itertools
 import json
 import os
+import re
 import secrets
 import select
 import shlex
@@ -25,6 +27,7 @@ from urllib.parse import parse_qs, urlsplit
 import _workflow
 import checkpoint
 import config
+import diff_budget
 import evidence_guard
 import mark_done
 import plan_guard
@@ -37,6 +40,9 @@ GATE_NAME = ".approval-gate"
 IDLE_SECONDS = 1800
 RECENT_CHECKPOINTS = 10
 MAX_BODY_BYTES = 4096
+EXCERPT_MAX_LINES = 80
+MAP_ENTRY = re.compile(r"^[ \t]*-[ \t]*(MUST|SKIM|SKIP|ASSUME)\b[ \t]*(.*)$", re.MULTILINE)
+MAP_LOCATION = re.compile(r"`([^`\s:]+)(?::(\d+)(?:-(\d+))?)?`")
 # No framing: a page that framed the board could trick clicks onto Mark done.
 CONTENT_SECURITY_POLICY = ("frame-ancestors 'none'; default-src 'self'; "
                            "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
@@ -95,7 +101,7 @@ def collect(root, requested_slug=None):
         "features": features,
         "selected": slug,
         "title": guarded(feature_title, log, spec, slug),
-        "phases": guarded(phase_cards, log),
+        "phases": guarded(phase_cards, log, plan, root, slug),
         "spec": spec,
         "plan": plan,
         "warnings": guarded(guard_warnings, log, plan, root),
@@ -190,12 +196,16 @@ def feature_title(log, spec, slug):
             or slug or "(unnamed)")
 
 
-def phase_cards(log):
+def phase_cards(log, plan, root, slug):
     cards = [phase_card(title, body, approved)
              for title, body, approved in _workflow.iter_phases(log)]
     current = next((card for card in cards if not card["approved"]), None)
     if current:
         current["current"] = True
+        current["diff"] = diff_size(current["title"], plan, root, slug)
+        for entry in current["review_map"]["entries"]:
+            if entry["tier"] == "MUST":
+                entry["excerpt"] = excerpt(root, entry)
     return cards
 
 
@@ -209,7 +219,56 @@ def phase_card(title, body, approved):
         "unresolved": field(body, "Unresolved"),
         "evidence": field(body, "Evidence"),
         "evidence_empty": evidence_guard.evidence_empty(body),
+        "review_map": review_map(field(body, "Review map")),
+        "over_budget": field(body, "Over budget"),
+        "diff": None,
     }
+
+
+def review_map(text):
+    if not text or _workflow.is_unfilled(text):
+        return {"summary": None, "entries": []}
+    summary = text.splitlines()[0].strip()
+    entries = [map_entry(match) for match in MAP_ENTRY.finditer(text)]
+    return {"summary": None if MAP_ENTRY.match(summary) else summary, "entries": entries}
+
+
+def map_entry(match):
+    tier, text = match.group(1), match.group(2).strip()
+    location = MAP_LOCATION.search(text)
+    if location is None or tier == "ASSUME":
+        return {"tier": tier, "text": text, "path": None, "start": None, "end": None}
+    start = int(location.group(2)) if location.group(2) else None
+    end = int(location.group(3)) if location.group(3) else start
+    note = (text[:location.start()] + text[location.end():]).strip(" —-")
+    return {"tier": tier, "text": note, "path": location.group(1), "start": start, "end": end}
+
+
+def excerpt(root, entry):
+    """The entry's lines from the working file, only for a regular file inside `root`."""
+    if entry["start"] is None or entry["start"] < 1:
+        return None
+    real_root = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(real_root, entry["path"]))
+    inside = os.path.commonpath([path, real_root]) == real_root
+    hidden = os.path.relpath(path, real_root).split(os.sep)[0] in (".git", _workflow.STATE_DIR)
+    if not inside or hidden or not os.path.isfile(path):
+        return None
+    last = min(entry["end"], entry["start"] + EXCERPT_MAX_LINES - 1)
+    with open(path, "r", encoding="utf-8", errors="replace") as source:
+        lines = list(itertools.islice(source, entry["start"] - 1, last))
+    return {"first": entry["start"], "lines": [line.rstrip("\n") for line in lines]}
+
+
+def diff_size(title, plan, root, slug):
+    number = plan_guard.PHASE_NUM.match(title)
+    estimate = plan_guard.phase_estimates(plan).get(int(number.group(1))) if number and plan else None
+    recorded = diff_budget.load(root).get(slug or "")
+    lines = recorded.get("lines") if isinstance(recorded, dict) and recorded.get("phase") == title else None
+    if estimate is None and lines is None:
+        return None
+    limit = plan_guard.budget_limit(estimate) if estimate is not None else None
+    return {"lines": lines, "estimate": estimate, "limit": limit}
 
 
 def field(body, name):
@@ -225,6 +284,7 @@ def guard_warnings(log, plan, root):
         warnings += plan_guard.budget_findings(log)
         warnings += plan_guard.map_findings(log, root)
         warnings += plan_guard.lessons_findings(log)
+        warnings += plan_guard.review_map_findings(log)
         warnings += evidence_warnings(log)
     return warnings
 

@@ -44,6 +44,9 @@ placeholder.>
   the coder Reads the spot directly instead of searching for it>
 - Done when: <the acceptance criteria from `spec.md` 1b that THIS phase delivers,
   quoted — not a restatement of the scope>
+- Size: <~N changed lines (added + deleted, tests included). MACHINE-CHECKED: the
+  plan guard measures the phase's real diff and refuses past 2× this (min +40) until
+  `- Over budget:` in phase-log.md says why. Aim for one sitting of review.>
 - Verify: <test/command/output that proves it — becomes the Evidence ledger>
 - Rollback: <checkpoint / how to revert this phase cleanly>
 
@@ -56,6 +59,7 @@ placeholder.>
   sitting. "It is a separate step" is not a reason; if there is none, merge it.>
 - Files:
 - Done when:
+- Size:
 - Verify:
 - Rollback:
 -->
