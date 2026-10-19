@@ -57,16 +57,31 @@ def served(tmp_path, monkeypatch):
         thread = threading.Thread(target=dashboard.serve, args=(server,))
         thread.start()
 
-        def request(path, method="GET", host="127.0.0.1:%d" % port):
+        def request(path, method="GET", host="127.0.0.1:%d" % port, headers=None, body=None):
             conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-            conn.request(method, path, headers={"Host": host})
+            conn.request(method, path, body=body, headers=dict(headers or {}, Host=host))
             response = conn.getresponse()
             result = response.status, response.read()
             conn.close()
             return result
 
+        request.origin = "http://127.0.0.1:%d" % port
         yield request
         thread.join(timeout=5)
+
+
+def padded_request(root):
+    return json.dumps({"project": os.path.realpath(root), "feature": "alpha", "pad": "x" * 5000})
+
+
+def mark_done_post(served, root, feature="alpha", changes=None, **request_options):
+    """POST /api/mark-done the way the page does; `changes` overrides or (None) drops a header."""
+    token = json.loads(served("/api/overview")[1])["token"]
+    headers = {"Origin": served.origin, "Content-Type": "application/json", "X-Dashboard-Token": token}
+    headers.update(changes or {})
+    sent_headers = {name: value for name, value in headers.items() if value is not None}
+    body = request_options.pop("body", json.dumps({"project": os.path.realpath(root), "feature": feature}))
+    return served("/api/mark-done", method="POST", headers=sent_headers, body=body, **request_options)
 
 
 def test_collect_reads_features_and_phases_through_the_workflow_parsers(git_repo):
@@ -156,7 +171,10 @@ def test_the_server_serves_the_page_and_live_state_and_nothing_else(tmp_path, se
     assert all(p["approved"] for p in json.loads(after)["phases"])
 
     assert served("/", host="evil.example:80")[0] == 403
-    assert served("/api/state", method="POST")[0] == 501
+    with urllib.request.urlopen(served.origin + "/", timeout=5) as response:
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+    assert served("/api/state", method="POST")[0] == 404
 
     other = tmp_path / "other"
     make_features(other)
@@ -203,9 +221,45 @@ def test_hitting_every_route_writes_nothing_not_even_in_git(git_repo, served):
         served(path)
     served("/api/state", method="POST")
     served("/api/state", host="evil.example")
+    assert mark_done_post(served, git_repo, changes={"Origin": None})[0] == 403
+    assert mark_done_post(served, git_repo, changes={"X-Dashboard-Token": "guess"})[0] == 403
+    assert mark_done_post(served, git_repo, feature="../x")[0] == 404
+    assert mark_done_post(served, git_repo, body=padded_request(git_repo))[0] == 400
 
     assert tree_fingerprint(git_repo) == before
     assert home_before and tree_fingerprint(home) == home_before
+
+
+def test_mark_done_writes_only_through_the_guarded_post(tmp_path, served):
+    make_features(tmp_path)
+    log_path = tmp_path / ".dev-workflow" / "features" / "alpha" / "phase-log.md"
+    before = log_path.read_bytes()
+    rejections = [
+        (403, {"changes": {"Origin": None}}),
+        (403, {"changes": {"Origin": "http://evil.example"}}),
+        (403, {"changes": {"X-Dashboard-Token": None}}),
+        (403, {"changes": {"X-Dashboard-Token": "guess"}}),
+        (403, {"changes": {"Content-Type": "text/plain"}}),
+        (403, {"host": "evil.example", "changes": {"Origin": "http://evil.example"}}),
+        (404, {"feature": "../x"}),
+        (400, {"body": padded_request(tmp_path)}),
+    ]
+    for expected_code, options in rejections:
+        assert mark_done_post(served, tmp_path, **options)[0] == expected_code, options
+    assert log_path.read_bytes() == before
+
+    unlisted = tmp_path / "unlisted"
+    make_features(unlisted)
+    unlisted_log = unlisted / ".dev-workflow" / "features" / "alpha" / "phase-log.md"
+    unlisted_before = unlisted_log.read_bytes()
+    assert mark_done_post(served, unlisted)[0] == 404
+    assert unlisted_log.read_bytes() == unlisted_before
+
+    code, body = mark_done_post(served, tmp_path)
+    assert (code, json.loads(body)) == (200, {"report": ["ticked: Phase 2 — server"]})
+    board = json.loads(served("/api/overview")[1])["projects"]
+    alpha = next(feature for feature in board[0]["features"] if feature["slug"] == "alpha")
+    assert alpha["state"] == "Done"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="--detach needs fork")

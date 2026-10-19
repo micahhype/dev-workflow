@@ -1,6 +1,6 @@
 ---
 name: dashboard
-description: Open a read-only local web board of the dev-workflow state across all projects — every feature's progress, the ones waiting for your approval first, and on click its phases, evidence, plan, spec, checkpoints and config — that refreshes itself while you work.
+description: Open a local web board of the dev-workflow state across all projects — every feature's progress, the ones waiting for your approval first, and on click its phases, evidence, plan, spec, checkpoints and config — that refreshes itself while you work.
 allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/../../hooks/dashboard.py" --detach)
 ---
 
@@ -9,9 +9,11 @@ Start the dashboard and tell the user where it is.
 The CLI is `python3 "${CLAUDE_SKILL_DIR}/../../hooks/dashboard.py"` (this resolves to
 the plugin's `hooks/dashboard.py`). It serves a page on `127.0.0.1` only, built from the
 guards' own functions, and polls every 2 seconds, so it tracks the working docs as
-they change. It is read-only: it serves GET requests and nothing else, and every action
-it shows (unlocking the gate, rolling back) is a `!` command for the user to run in
-their own shell.
+they change. Its one write is the drawer's **Mark done** button (ticks the remaining
+phases of a feature the user already finished), accepted only from the page itself; every
+other action it shows (unlocking the gate, rolling back) is a `!` command for the user to
+run in their own shell. Never use that button or its route yourself: the approval tick is
+the user's.
 
 Run exactly:
 ```

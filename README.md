@@ -50,7 +50,8 @@ Working docs scaffold automatically under `.dev-workflow/features/<slug>/`; mult
 | `/dev-workflow:feature` | Drive the whole feature workflow (orchestrator). `--bug` swaps the front end for reproduce → root cause → regression |
 | `/dev-workflow:status` | Readout of the active feature / phase / gate |
 | `/dev-workflow:config` | Effective settings, where each came from, and which config lines are silently doing nothing |
-| `/dev-workflow:dashboard` | Read-only local web board (127.0.0.1) of all projects: each feature's progress, the ones waiting for your approval first; phases, evidence, plan, spec, checkpoints and config on click; refreshes itself |
+| `/dev-workflow:dashboard` | Local web board (127.0.0.1) of all projects: each feature's progress, the ones waiting for your approval first; phases, evidence, plan, spec, checkpoints and config on click; refreshes itself. Its only write: a guarded Mark done button |
+| `python3 <plugin>/hooks/mark_done.py <root> <slug>` | Tick every open phase of a feature you already finished as approved — or use the **Mark done** button in the dashboard drawer. The CLI refuses inside Claude Code; run it in your own terminal |
 | `/dev-workflow:checkpoints` | List auto-snapshots |
 | `/dev-workflow:rollback` | Restore to a checkpoint (safe, reversible) |
 

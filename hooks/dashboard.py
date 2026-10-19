@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""CLI behind /dev-workflow:dashboard: a read-only local web view of the workflow.
+"""CLI behind /dev-workflow:dashboard: a local web view of the workflow.
 
-Read-only is the invariant: a browser request is no Claude tool call, so gate.py never
-sees it, and any route that writes a file or a git ref would bypass the approval gate.
+GET never writes. The one write is POST /api/mark-done, only with this server's Host and
+Origin, a JSON body and the per-launch token, and only into a listed project's feature.
+
+Claude can already Edit phase-log.md, so the new risk is a cross-site request from another
+page; Origin + token + a JSON content type (none a plain form can send) close it.
 
 Never call checkpoint.working_tree / snapshot / since_ship (they write git objects) or
-any hook's main(); actions are shown as `!` commands for the user's own shell.
+any hook's main(); other actions are shown as `!` commands for the user's own shell.
 """
+import datetime
+import hmac
 import json
 import os
+import secrets
 import select
 import shlex
 import sys
@@ -20,6 +26,7 @@ import _workflow
 import checkpoint
 import config
 import evidence_guard
+import mark_done
 import plan_guard
 import status
 
@@ -29,6 +36,11 @@ CHECKPOINT_CLI = os.path.join(HOOKS_DIR, "checkpoint.py")
 GATE_NAME = ".approval-gate"
 IDLE_SECONDS = 1800
 RECENT_CHECKPOINTS = 10
+MAX_BODY_BYTES = 4096
+# No framing: a page that framed the board could trick clicks onto Mark done.
+CONTENT_SECURITY_POLICY = ("frame-ancestors 'none'; default-src 'self'; "
+                           "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+                           "connect-src 'self'")
 TEMPLATE_TITLE = "<title>"
 
 
@@ -266,7 +278,9 @@ class Handler(BaseHTTPRequestHandler):
             with open(PAGE_PATH, "rb") as page:
                 self.send(200, "text/html; charset=utf-8", page.read())
         elif url.path == "/api/overview":
-            self.send_json(overview(self.server.project_root))
+            board = overview(self.server.project_root)
+            board["token"] = self.server.token
+            self.send_json(board)
         elif url.path == "/api/state":
             self.send_state(parse_qs(url.query))
         else:
@@ -282,8 +296,71 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_not_found()
 
-    def send_json(self, payload):
-        self.send(200, "application/json", json.dumps(payload).encode("utf-8"))
+    def do_POST(self):
+        if not self.is_own_host():
+            self.send(403, "text/plain; charset=utf-8", b"forbidden host\n")
+            return
+        if urlsplit(self.path).path != "/api/mark-done":
+            self.send_not_found()
+            return
+        code, payload = self.mark_done_response()
+        self.send_json(payload, code)
+
+    def mark_done_response(self):
+        refusal = self.write_refusal()
+        if refusal:
+            return 403, {"error": refusal}
+        try:
+            return self.apply_mark_done()
+        except (OSError, ValueError, RecursionError) as exc:
+            return 500, {"error": str(exc) or type(exc).__name__}
+
+    def apply_mark_done(self):
+        request = self.mark_done_request()
+        if request is None:
+            return 400, {"error": "expected a JSON object {project, feature} of at most %d bytes"
+                                  % MAX_BODY_BYTES}
+        if request["project"] not in projects(self.server.project_root):
+            return 404, {"error": "not a project on this dashboard"}
+        today = datetime.date.today().isoformat()
+        try:
+            report = mark_done.apply(request["project"], request["feature"], today)
+        except mark_done.NotAFeature as refusal:
+            return 404, {"error": str(refusal)}
+        except mark_done.Refused as refusal:
+            return 409, {"error": str(refusal)}
+        return 200, {"report": report}
+
+    def write_refusal(self):
+        if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
+            return "Origin must be this dashboard"
+        media_type = self.headers.get("Content-Type", "").split(";")[0].strip()
+        if media_type != "application/json":
+            return "Content-Type must be application/json"
+        token = self.headers.get("X-Dashboard-Token", "")
+        if not hmac.compare_digest(token.encode("utf-8"), self.server.token.encode("utf-8")):
+            return "missing or wrong X-Dashboard-Token"
+        return None
+
+    def mark_done_request(self):
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            return None
+        if not 0 < length <= MAX_BODY_BYTES:
+            return None
+        body = self.rfile.read(length)
+        try:
+            request = json.loads(body)
+        except ValueError:
+            return None
+        if not isinstance(request, dict):
+            return None
+        has_names = isinstance(request.get("project"), str) and isinstance(request.get("feature"), str)
+        return request if has_names else None
+
+    def send_json(self, payload, code=200):
+        self.send(code, "application/json", json.dumps(payload).encode("utf-8"))
 
     def send_not_found(self):
         self.send(404, "text/plain; charset=utf-8", b"not found\n")
@@ -300,6 +377,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         self.wfile.write(body)
 
@@ -310,6 +389,7 @@ class Handler(BaseHTTPRequestHandler):
 def make_server(root):
     server = HTTPServer(("127.0.0.1", 0), Handler)
     server.project_root = root
+    server.token = secrets.token_urlsafe(32)
     return server
 
 

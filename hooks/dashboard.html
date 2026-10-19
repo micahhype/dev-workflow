@@ -82,6 +82,15 @@
   .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
   .drawer-body { padding: 16px 20px 32px; overflow-y: auto; flex: 1; }
 
+  .mark-done:focus { outline: none; }
+  .mark-done { border-top: 1px solid var(--line); padding: 14px 0 0; margin-top: 4px; }
+  .mark-done-title { font-weight: 600; }
+  .mark-done p { margin: 2px 0 8px; }
+  .mark-done-actions { display: flex; gap: 8px; }
+  .mark-done-report { margin: 4px 0 0; padding-left: 20px; }
+  .action { font: inherit; font-size: 14px; padding: 3px 12px; cursor: pointer; color: var(--ink);
+            border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .action:disabled { opacity: .6; cursor: default; }
   .warning { border-left: 4px solid var(--wait); background: var(--bg); padding: 8px 12px;
              border-radius: 6px; margin-bottom: 10px; }
   .phase { border-top: 1px solid var(--line); padding: 12px 0; }
@@ -173,6 +182,9 @@ let openFeature = null;
 let drawerKey = null;
 let selectedTab = 'Phases';
 let opener = null;
+let dashboardToken = null;
+let shownDrawer = null;
+let markDoneStatus = { stage: 'idle', lines: [], isError: false };
 const expandedDone = new Set();
 
 function el(tag, className, ...children) {
@@ -222,7 +234,9 @@ async function pollOverview() {
     isOffline = false;
     if (text !== overviewText) {
       overviewText = text;
-      overviewProjects = JSON.parse(text).projects;
+      const board = JSON.parse(text);
+      overviewProjects = board.projects;
+      dashboardToken = board.token;
       renderOverview();
     }
   } catch (error) {
@@ -388,6 +402,7 @@ function openDrawer(project, feature, node) {
   openFeature = { root: project.root, name: project.name, slug: feature.slug };
   drawerKey = null;
   selectedTab = 'Phases';
+  markDoneStatus = { stage: 'idle', lines: [], isError: false };
   document.getElementById('drawer').classList.remove('wide');
   document.getElementById('drawer-title').textContent = feature.title;
   document.getElementById('drawer-subtitle').textContent = project.name;
@@ -405,9 +420,13 @@ function closeDrawer() {
   if (opener && opener.isConnected) opener.focus();
 }
 
-function currentTrack() {
+function openOverviewFeature() {
   const project = overviewProjects.find((p) => p.root === openFeature.root);
-  const feature = project && listedFeatures(project).find((f) => f.slug === openFeature.slug);
+  return project && listedFeatures(project).find((f) => f.slug === openFeature.slug);
+}
+
+function currentTrack() {
+  const feature = openOverviewFeature();
   return feature ? feature.track : [];
 }
 
@@ -435,10 +454,12 @@ function renderDrawer(state, track) {
   const gate = isFailed(state.gate) ? 'unavailable' : state.gate;
   document.getElementById('drawer-title').textContent = state.title;
   document.getElementById('drawer-subtitle').textContent = openFeature.name + ', gate ' + gate;
+  shownDrawer = { state, track };
   renderTabs(state, track);
 }
 
 function renderTabs(state, track) {
+  const hadMarkDoneFocus = Boolean(document.activeElement && document.activeElement.closest('.mark-done'));
   const openDetails = new Set([...document.querySelectorAll('#drawer-body details[open]')].map((d) => d.dataset.key));
   const tabs = TABS.map((name) => {
     const tab = el('button', 'tab', name);
@@ -458,6 +479,7 @@ function renderTabs(state, track) {
   for (const details of body.querySelectorAll('details')) {
     details.open = openDetails.has(details.dataset.key);
   }
+  if (hadMarkDoneFocus) focusMarkDone();
 }
 
 function tabContent(state, track) {
@@ -473,7 +495,89 @@ function phasesTab(state, track) {
     : state.warnings.map((warning) => el('div', 'warning', warning));
   if (isFailed(state.phases)) return [...warnings, unavailable(state.phases)];
   if (state.phases.length === 0) return [...warnings, el('p', 'muted', 'No phases yet.')];
-  return [...warnings, ...state.phases.map((phase, index) => phaseBlock(phase, track[index] || 'todo'))];
+  const phaseBlocks = state.phases.map((phase, index) => phaseBlock(phase, track[index] || 'todo'));
+  return [...warnings, ...phaseBlocks, ...markDoneBlock(state)];
+}
+
+function markDoneBlock(state) {
+  const isDone = state.phases.every((phase) => phase.approved);
+  const feature = openOverviewFeature();
+  const hasNoPhases = feature && feature.state === NO_PHASES_STATE;
+  const hasResult = markDoneStatus.lines.length > 0;
+  if ((isDone || hasNoPhases) && !hasResult) return [];
+  const block = el('div', 'mark-done', el('div', 'mark-done-title', 'Mark done'), ...markDoneControls());
+  block.setAttribute('role', 'status');
+  block.setAttribute('aria-live', 'polite');
+  block.tabIndex = -1;
+  return [block];
+}
+
+function markDoneControls() {
+  if (markDoneStatus.lines.length > 0) {
+    const lineClass = markDoneStatus.isError ? 'error' : '';
+    const report = el('ul', 'mark-done-report', ...markDoneStatus.lines.map((line) => el('li', lineClass, line)));
+    report.tabIndex = -1;
+    return [report];
+  }
+  if (markDoneStatus.stage === 'idle') {
+    return [el('p', 'muted', 'Already finished this feature? Tick every remaining phase as approved.'),
+      actionButton('Mark done', () => setMarkDoneStage('confirming'))];
+  }
+  const isSending = markDoneStatus.stage === 'sending';
+  const confirm = actionButton(isSending ? 'Marking…' : 'Confirm', sendMarkDone);
+  const cancel = actionButton('Cancel', () => setMarkDoneStage('idle'));
+  confirm.disabled = isSending;
+  cancel.disabled = isSending;
+  return [el('p', '', "Tick every remaining phase as approved? A session still working on this feature won't be told."),
+    el('div', 'mark-done-actions', confirm, cancel)];
+}
+
+function actionButton(label, onClick) {
+  const button = el('button', 'action', label);
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+function setMarkDoneStage(stage) {
+  markDoneStatus = { stage, lines: [], isError: false };
+  redrawShownDrawer();
+}
+
+function redrawShownDrawer() {
+  renderTabs(shownDrawer.state, shownDrawer.track);
+  focusMarkDone();
+}
+
+function focusMarkDone() {
+  const enabledButton = document.querySelector('.mark-done button:not(:disabled)');
+  const target = enabledButton || document.querySelector('.mark-done-report') || document.querySelector('.mark-done');
+  if (target) target.focus();
+}
+
+async function sendMarkDone() {
+  const target = openFeature;
+  setMarkDoneStage('sending');
+  const result = await postMarkDone(target);
+  if (openFeature !== target) return;
+  markDoneStatus = { stage: 'done', lines: result.lines, isError: result.isError };
+  redrawShownDrawer();
+  pollOverview();
+  pollDetail();
+}
+
+async function postMarkDone(target) {
+  try {
+    const response = await fetch('/api/mark-done', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard-Token': dashboardToken },
+      body: JSON.stringify({ project: target.root, feature: target.slug }),
+    });
+    const result = await response.json();
+    if (!response.ok) return { lines: [result.error], isError: true };
+    return { lines: result.report, isError: false };
+  } catch (error) {
+    return { lines: [error.message], isError: true };
+  }
 }
 
 function phaseBlock(phase, segment) {
