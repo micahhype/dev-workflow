@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-10-19
+
+### Added
+- **Review map at every phase checkpoint.** The `code-reviewer` sorts each changed hunk into
+  `MUST` (with the concrete question the user must answer), `SKIM` or `SKIP`, and lists every
+  `ASSUME`: a rule or default the code settles that the spec did not. Security surface, new
+  branches, data writes, changed error handling, public signatures and untested code can never go
+  below `MUST`. The orchestrator records it as `- Review map:` and opens the approval checkpoint
+  with it instead of the diff. The plan guard refuses to end a turn on a reviewed phase without one.
+- **Per-phase diff budget.** Plan phases state `- Size: ~N lines`. `hooks/diff_budget.py` records
+  each phase's baseline tree at Stop (no per-phase commits needed), and the plan guard refuses
+  past 2× the estimate (minimum +40 lines) until the phase-log `- Over budget:` gives a reason.
+- **Dashboard shows the review map**: totals, the diff against its budget, `MUST` entries with
+  their code (read from the working file, only inside the project), assumptions, then skim/skip.
+- **Mark done from the dashboard.** A feature finished outside the workflow no longer waits
+  forever: the drawer's Mark done button (inline confirm) ticks its open phases through one
+  guarded `POST /api/mark-done` (own Host and Origin, JSON body, per-launch token). GET stays
+  write-free. `hooks/mark_done.py` does the same from your own terminal.
+
 ## [0.17.2] - 2026-10-07
 
 ### Changed
