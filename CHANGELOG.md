@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-10-27
+
+### Added
+- **`scripts/subagent_traces.py`** reads your Claude Code subagent transcripts (default
+  `~/.claude/projects`) into `traces.jsonl`, one row per run: feature trace id, agent, start,
+  duration, tokens counted once per API request, model. No prompt text is written. Prints tokens
+  and time per agent type plus the agents that run together in one feature. Field names match
+  single-agent-loop-kit's `coupling_map.py`.
+
+### Changed
+- **Trivial phases are coded by the orchestrator itself**, with no `coder` spawn, following the
+  coder's rules from `agents/coder.md`. A freshly spawned `code-reviewer` still reviews every
+  phase, and in a phase the orchestrator coded it cannot accept its own rebuttal: a finding it
+  disagrees with goes to you at once. Standard and complex tiers keep the `coder`.
+- **`code-reviewer` runs the per-phase security pass**, asked for only when the phase touches a
+  sensitive surface (same gating as before). Critical/High findings always block. Its
+  `Security pass:` line is what ticks `[x] security-scanned`.
+
+### Removed
+- **`security-scan-fast` agent**, folded into `code-reviewer`. A `security-scan-fast` key left in
+  `.dev-workflow/models.json` now does nothing; `/dev-workflow:config` lists it as unknown.
+
 ## [0.18.0] - 2026-10-19
 
 ### Added
