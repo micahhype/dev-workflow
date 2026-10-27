@@ -6,7 +6,8 @@ description: Orchestrate a full spec-driven feature workflow — establish proje
 # Feature workflow (orchestrator)
 
 You are the ORCHESTRATOR. You delegate research, review, and coding to subagents
-and keep the conversation with the user — you don't do those yourself.
+— except the trivial tier, where you write the code (Stage 4) — and keep the
+conversation with the user; you don't do the rest yourself.
 
 **Golden rules**
 - Source of truth is FILES, not this conversation: `conventions.md` and
@@ -35,16 +36,18 @@ the safety hooks cannot see, and they fail SILENTLY when they can't see it.
 | String | Who writes it | When | What reads it |
 |---|---|---|---|
 | `## Phase N — <title>` | you | at scaffold | all hooks — a heading that doesn't start with `## Phase` or `## Final review` (case-insensitive) is not a section, and its content is absorbed into the phase above |
-| `[x] coded` | the `coder` | when it finishes implementing | — |
-| `- Evidence: <cited proof>` | the `coder` pre-fills what it RAN (test/command output); you AUGMENT with what the reviewers verified | coder on return, you after reviews, before yielding | the Stop evidence gate — an empty or placeholder ledger is refused |
+| `[x] coded` | the `coder` (you, in a trivial phase) | when it finishes implementing | — |
+| `- Evidence: <cited proof>` | the `coder` (you, in a trivial phase) pre-fills what it RAN (test/command output); you AUGMENT with what the reviewers verified | coder on return, you after reviews, before yielding | the Stop evidence gate — an empty or placeholder ledger is refused |
 | `[x] code-reviewed` (Final review uses `full code review`) | you | after `code-reviewer` returns AND its findings are resolved | **the Stop evidence gate** — ticking either string ARMS it: from here on, ending your turn with an empty `- Evidence:` line is blocked |
-| `[x] security-scanned` | you | after `security-scan-fast` returns; leave unticked when the phase's surface didn't warrant a scan | — |
+| `[x] security-scanned` | you | after `code-reviewer` returns a `Security pass:` line; leave unticked when the phase's surface didn't warrant the pass | — |
 | `[x] USER APPROVED` | **you, but ONLY after the user actually said so** | at the approval checkpoint | `status.py`, and the evidence gate's "which phase is current" logic |
 
 The `coder` owns `[x] coded` and the first draft of `- Evidence:` because it is the
 one that ran the code. Everything a REVIEW or the USER attests to is yours: the
 review boxes, the augmented evidence, and `USER APPROVED`. The coder must never tick
-a review box or `USER APPROVED` — see `agents/coder.md`.
+a review box or `USER APPROVED` — see `agents/coder.md`. In a trivial phase you are
+the coder: you tick `[x] coded` and draft `- Evidence:`, and the review boxes still
+wait on a freshly spawned reviewer.
 
 `[x] USER APPROVED` is the one box you must never tick on your own initiative. No
 hook can tell your tick from the user's — writing it without an explicit approval
@@ -82,7 +85,7 @@ the guard stays silent — Stages 0.5–2 legitimately end turns with no plan wr
 
 ## Model routing — per-agent, user-overridable
 Each agent has a sensible default model in its `agents/*.md` frontmatter (Opus
-wherever the job is judgement, Sonnet for the quick per-phase security scan). If `.dev-workflow/models.json` exists, read
+wherever the job is judgement). If `.dev-workflow/models.json` exists, read
 it ONCE now: it maps agent name → model (aliases `opus`/`sonnet`/`haiku`/`fable`, a
 full model ID, or `inherit`; keys starting with `_` are ignored). When you spawn an
 agent named there, pass that model as the spawn-time model override; for any agent
@@ -177,7 +180,7 @@ subagent that cannot reproduce and cannot ask will hand you a plausible cause.
 1. **Reproduce it first, and paste the proof.** The smallest command, test or request
    that makes the bug happen, plus its actual output. Reproduce BEFORE you diagnose —
    a cause you reasoned out from reading code is a hypothesis, and this workflow will
-   spend a coder, two reviewers and a user approval on it.
+   spend an implementation, a review and a user approval on it.
    **If you cannot reproduce it, STOP and go to the user** with what you tried and
    what you need (the failing input, the env, the log line, the version). Do not
    proceed on a report alone: an unreproducible bug has no way to prove it was fixed,
@@ -239,7 +242,7 @@ feel like real features and most of them are twenty lines.
 
 | Tier | It is this tier only if you can name one of these | What actually runs |
 |---|---|---|
-| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase** → `code-reviewer` (+ `security-scan-fast` if the surface warrants) → your approval. **No researcher, no panel, no plan-reviewer, no Stage 5.** |
+| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase**, coded by you (no `coder`) → `code-reviewer` (with its security pass if the surface warrants) → your approval. **No researcher, no panel, no plan-reviewer, no Stage 5.** |
 | **standard** | a new interface others will call (endpoint, command, screen, public function), OR new persistent state/schema, OR several files across one subsystem | survey, plus external research **only if there is a real external question** → simplicity-first architect (+ one signalled angle) → plan + `plan-reviewer` → phases → Stage 5 only if the plan ended up with more than one phase |
 | **complex** | crosses a subsystem or trust boundary, OR changes a data model other code depends on, OR the design itself is security-sensitive, OR wide blast radius | full machinery — simplicity-first + the signalled angles, full final audit |
 
@@ -260,7 +263,7 @@ tell the user you scaled it down and why. Downgrading needs no permission. Upgra
 does: name the signal and tell the user before you spend their time on it.
 
 The tier scales research and option-panel depth — NOT security coverage:
-`code-reviewer` runs every phase in every tier, and `security-scan-fast` runs
+`code-reviewer` runs every phase in every tier, and runs its security pass
 whenever a phase touches a security-sensitive surface (see Stage 4), trivial or
 complex alike. Nor does it scale the approval checkpoints: a cheaper tier means less
 machinery between the checkpoints, never fewer of them.
@@ -408,7 +411,20 @@ Reads, not a subagent.
    plan down in step 3, say what you cut.
 
 ## Stage 4 — Phased implementation (loop per phase)
-**Reuse ONE coder across the phases — don't respawn each phase.** Spawn the `coder`
+**Trivial tier: you write the code yourself — no `coder` spawn.** Use the tier as
+it stands after Stage 3's re-check: a feature downgraded to trivial counts; a
+standard one that merely ended with one phase does not. First Read
+`${CLAUDE_SKILL_DIR}/../../agents/coder.md` once, from "While coding:" through its
+"Tests" section, and follow it as the coder would: `conventions.md` and the
+project's formatter/linter, scope, prefer what exists, the clean-code and
+readability rules, the agreed `## Structure`, comments, tests, and run the
+tests/build and report honestly. Then tick `[x] coded`,
+fill `- Changed:` and pre-fill `- Evidence:`; anything extra goes to the user as
+`Suggested, not built:`. Fix rounds are yours, scoped to the findings; reviewers stay
+freshly spawned; `models.coder` does not apply to these phases.
+
+**Standard/complex tiers: reuse ONE coder across the phases — don't respawn each
+phase.** Spawn the `coder`
 for Phase 1; for every later phase, CONTINUE that same coder (via SendMessage)
 rather than a fresh Task. It keeps its warm context — the files it already opened,
 the conventions, and what earlier phases did — so you pay the codebase-intake cost
@@ -419,7 +435,7 @@ any such changes. Reviewers are the opposite: ALWAYS freshly spawned per phase �
 their value is objective fresh eyes on code they didn't write.
 
 For each phase in `plan.md`, in order:
-1. Give the coder THIS phase only — its scope + the chosen approach, quoted INLINE
+1. (standard/complex tiers) Give the coder THIS phase only — its scope + the chosen approach, quoted INLINE
    from the phase's `plan.md` block (including its `Done when:` — that is what the
    coder's Evidence has to prove) plus the one-line solution from `spec.md`, and
    the feature dir path. Hand it the EXACT files to touch as paths — and the
@@ -432,39 +448,42 @@ For each phase in `plan.md`, in order:
    coder mirrors the exemplar, and the code-reviewer gets the same block. A reused coder already knows most of
    this: send only what's NEW for this phase, and don't have it re-read the whole
    spec/plan.
-2. When it returns, run the reviews IN PARALLEL (freshly spawned) — hand each the
-   changed files/diff and exact paths directly, never make them re-scan to find the
-   change. Reviewers have no Bash and cannot run `git diff`: paste the diff inline,
+2. When the code is done (the coder returns, or you finish it in trivial), spawn a
+   fresh `code-reviewer` — hand it the changed files/diff and exact paths directly,
+   never make it re-scan to find the change. Reviewers have no Bash and cannot run `git diff`: paste the diff inline,
    or for a long one, each changed file with the line ranges of its hunks. Add the
    phase's `Done when:` (the code-reviewer needs it to judge what
    is over-built) and `plan.md`'s `## Structure` (to judge whether the code
    follows the agreed shape). Ask the code-reviewer for its **review map** (see
-   `agents/code-reviewer.md`) — on a re-review, for the fix diff only. If the coder returned `Suggested, not built:` items, carry them
-   to the user at this phase's checkpoint — never build them on your own call.
-   Before the reviews, check the diff for files the phase should not leave behind:
+   `agents/code-reviewer.md`) — on a re-review, for the fix diff only. If the coder returned `Suggested, not built:` items (or your
+   own trivial work produced some), carry them to the user at this phase's checkpoint — never build them on your own call.
+   Before the review, check the diff for files the phase should not leave behind:
    probe/smoke/e2e scripts, backups, `.diff` dumps, handoff notes — in `src/`,
    `scripts/` or the feature dir. Delete them unless the plan asked for them.
-   - `code-reviewer` (logic/quality) — ALWAYS, every phase, every tier.
-   - `security-scan-fast` (fast security pass) — ONLY when this phase touches a
-     security-sensitive surface: auth/authz, input handling/parsing, crypto or
-     secrets, data access (queries, serialization/deserialization), or external
-     I/O (network, filesystem, subprocess). Gated by the phase's SURFACE, not the
-     tier — a copy tweak or rename in a complex feature needs no scan; a new
-     endpoint in a trivial one does. When unsure, run it.
-   Rationale: the per-phase scan catches LOCAL, compounding bugs early (injection,
-   hardcoded secrets, missing authz on a new endpoint) when they are cheap to fix.
-   EMERGENT, cross-phase vulnerabilities are the Stage 5 `security-audit`'s job, so
-   skipping the scan on non-sensitive phases loses nothing there.
-3. Summarize the review(s) that ran for the user. Update `phase-log.md` — using the
+   The `code-reviewer` (logic/quality) runs ALWAYS, every phase, every tier. Ask for
+   its **Security pass** ONLY when this phase touches a security-sensitive surface:
+   auth/authz, input handling/parsing, crypto or secrets, data access (queries,
+   serialization/deserialization), or external I/O (network, filesystem,
+   subprocess). Gated by the phase's SURFACE, not the tier — a copy tweak or rename
+   in a complex feature needs no security pass; a new endpoint in a trivial one
+   does. When unsure, ask for it.
+   Rationale: the per-phase security pass catches LOCAL, compounding bugs early
+   (injection, hardcoded secrets, missing authz on a new endpoint) when they are
+   cheap to fix. EMERGENT, cross-phase vulnerabilities are the Stage 5
+   `security-audit`'s job, so skipping the pass on non-sensitive phases loses
+   nothing there.
+3. Summarize the review that ran for the user. Update `phase-log.md` — using the
    LITERAL checkbox strings from the table above, which the hooks parse. The coder
-   already ticked `[x] coded` and pre-filled `- Evidence:` with what it ran; your job
-   here is the review boxes and evidence:
-   - If reviewers found issues, have `coder` fix them, then re-review — **under the
-     round budget below. Count the rounds; do not loop until they agree.**
+   (or you, in trivial) already ticked `[x] coded` and pre-filled `- Evidence:` with
+   what it ran; your job here is the review boxes and evidence:
+   - If the reviewer found issues, have `coder` fix them (fix them yourself in
+     trivial), then re-review — **under the round budget below. Count the rounds; do
+     not loop until they agree.**
    - Tick `[x] code-reviewed` once `code-reviewer`'s findings are resolved (plus
-     `[x] security-scanned` if the scan ran). "Resolved" means fixed, rebutted with
-     evidence you accepted, or decided by the user at escalation — never "we ran out
-     of rounds".
+     `[x] security-scanned` when its report carries the `Security pass:` line).
+     "Resolved" means fixed, rebutted with evidence you accepted (never your own
+     rebuttal in a phase you coded), or decided by the user at escalation — never
+     "we ran out of rounds".
    - Record the **`- Review map:`** in the phase's section: the first round's map,
      with each re-review's fix-diff entries merged in (a hunk changed by a fix is
      re-tiered, never left at a lower tier than the fix warrants). Replace the
@@ -560,7 +579,8 @@ fixes → re-review is round 1. One more if needed is round 2. There is no round
 
 - **Re-reviews are DELTA-SCOPED.** Hand the fresh reviewer the previous round's
   findings AND the fix diff, and tell it to judge THOSE — did each finding get
-  fixed, did the fix break anything — not to re-review the phase. A new finding is
+  fixed, did the fix break anything — not to re-review the phase — and ask for the
+  security pass again if round 0 had one. A new finding is
   admissible only if it is BLOCKING (correctness, security, data loss). New
   non-blocking nits go on the `- Deferred nits:` line and never justify a round;
   unscoped re-reviews are what turn a 2-round loop into a 6-round one.
@@ -569,7 +589,9 @@ fixes → re-review is round 1. One more if needed is round 2. There is no round
   instead of editing. You adjudicate: if the rebuttal cites concrete code and the
   finding doesn't hold, mark it resolved-by-rebuttal and do NOT force the change.
   Deference to a reviewer that is mistaken damages the code — that is a real cost,
-  not a diplomatic one.
+  not a diplomatic one. In a phase you coded you cannot accept your own rebuttal: a
+  finding you disagree with goes to the user at once with `AskUserQuestion`, not
+  after the round budget.
 - **Never send the same finding back unchanged.** If round 2 would repeat round 1's
   argument, the loop has converged on disagreement, not on truth. Escalate now
   rather than spending the round.
@@ -607,14 +629,14 @@ phase's approval checkpoint. The plan guard requires them there.
 
 1. Run over all phases together. Brief both reviewers with the feature's
    footprint so they don't re-discover it: every changed file grouped by phase,
-   with the line ranges of its hunks, and which phases skipped `security-scan-fast`.
+   with the line ranges of its hunks, and which phases skipped the code-reviewer's security pass.
    - `code-reviewer` on CROSS-PHASE issues ONLY — inconsistencies, phase
      interactions, integration seams. Do NOT re-review files from scratch (done
      per phase).
    - `security-audit` (deep pass) — owns EMERGENT, cross-phase interaction
      vulnerabilities (auth flows spanning phases, data-flow and trust-boundary
      analysis). It must ALSO give a full pass to any security-sensitive surface
-     whose per-phase `security-scan-fast` was gated out in Stage 4, so nothing
+     whose per-phase security pass was gated out in Stage 4, so nothing
      ships unscanned. Do NOT re-review clean, non-sensitive phases from scratch.
 2. Summarize findings; update `phase-log.md` final section and its `- Evidence:`
    line with feature-level proof (test-suite result, validation output, key
@@ -694,6 +716,6 @@ section has no `- Post-ship reviewed:` line:
 - Subagents can't pause to ask mid-task; scope each delegated task tightly and
   resolve ambiguity with the user BEFORE delegating — that is what Stage 0.5 is
   for, and why the analyst role is yours and can never be delegated to a subagent.
-- Reviewers are read-only with fresh context; coding stays with `coder` so
-  reviewers judge someone else's code.
+- Reviewers are read-only with fresh context and always freshly spawned, so they
+  judge code they didn't write — the `coder`'s, or yours in a trivial phase.
 - For a hard-enforced approval gate, see the `.approval-gate` hook in the README.

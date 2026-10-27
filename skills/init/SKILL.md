@@ -116,9 +116,9 @@ the lean budget is protecting.
 6. After writing, point the user to **model routing** (optional, one line each) so
    they can tune cost/quality before running a feature:
    - **Per-agent (recommended):** copy the plugin's `templates/models.json` to
-     `.dev-workflow/models.json` and map any of the seven agents
+     `.dev-workflow/models.json` and map any of the six agents
      (`domain-researcher`, `solution-architect`, `plan-reviewer`, `coder`,
-     `code-reviewer`, `security-scan-fast`, `security-audit`) to a model — an alias
+     `code-reviewer`, `security-audit`) to a model — an alias
      (`opus`/`sonnet`/`haiku`/`fable`), a full model ID, or `inherit`. Omitted
      agents keep their default; prompts are untouched.
    - **All agents at once:** set `CLAUDE_CODE_SUBAGENT_MODEL=<model>` before launching.

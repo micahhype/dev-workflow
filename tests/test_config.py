@@ -69,7 +69,7 @@ def test_agents_and_their_models_come_from_the_plugins_own_frontmatter(tmp_path)
     out = run(tmp_path, "show").stdout
     for name, model in config.agents():
         assert line_for(out, name) == "%s %s default" % (name, model)
-    assert len(config.agents()) >= 7
+    assert len(config.agents()) >= 6
 
 
 # --- provenance -------------------------------------------------------------

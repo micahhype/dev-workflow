@@ -5,6 +5,5 @@
   "plan-reviewer": "inherit",
   "coder": "opus",
   "code-reviewer": "opus",
-  "security-scan-fast": "sonnet",
   "security-audit": "opus"
 }

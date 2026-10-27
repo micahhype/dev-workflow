@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a code diff for correctness, logic bugs, and maintainability before phase completion. Read-only.
+description: Reviews a code diff for correctness, logic bugs, and maintainability before phase completion, plus a security pass when the brief asks for one. Read-only.
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -99,6 +99,21 @@ Focus on:
   code, deserves that one line. Tool directives (`eslint-disable`, `noqa`,
   `@ts-expect-error`) are not comments.
 
+**Security pass — only when the brief asks for it** (the phase touches a
+security-sensitive surface). Read the "Security focus" section of `conventions.md`,
+then flag (ignore style, naming, formatting):
+- Generic checklist: injection (SQL/command/template), auth/authorization
+  bypass, IDOR, leaked or logged secrets, insecure crypto, unsafe
+  deserialization, SSRF, path traversal, missing validation of UNTRUSTED input at a trust boundary
+  (do not ask to re-validate values from internal callers or already-typed data).
+- Any project-specific high-value risks named in `conventions.md`.
+- If no conventions file: apply the generic checklist above and note the domain
+  you assumed.
+Give each security finding a severity — Critical/High/Medium/Low — on top of its
+BLOCKING/NIT label. Critical and High are always BLOCKING; for Medium and Low say
+which way you lean and why — an inflated severity spends a round a real
+vulnerability may need. On a RE-REVIEW the pass re-runs on the fix diff only.
+
 **If this is a RE-REVIEW** (the brief hands you a previous round's findings plus
 the fix diff), your scope is those findings and that diff — NOT the phase again.
 For each prior finding say FIXED / NOT FIXED / FIX INTRODUCED A NEW PROBLEM, and
@@ -134,8 +149,11 @@ Return (your final message IS the returned data):
   with `N must-read / N skim / N skip of N changed lines`, counted from the diff. If
   MUST passes ~150 lines, say the phase is too big to review in one sitting.
   On a RE-REVIEW, map only the fix diff; the orchestrator merges it in.
-- Leave security to the security reviewers; if you spot a security bug, just note
-  it briefly for handoff.
+- `Security pass:` — only when the brief asked for it: the security findings, or
+  "No obvious vulnerabilities found" citing the concrete surfaces you checked (which
+  files/entry points, which categories from the checklist) — a clean verdict must
+  show what was scanned, not just assert safety. When not asked, still report a security
+  bug you notice anyway, with a severity and label as in the Security pass.
 - EVIDENCE, not assertion: pass or fail, cite what you checked — specific
   files/functions read and concrete cases verified (e.g. "read parse() at
   x.py:20-60; empty-input and negative branches handled"). A bare "looks fine" is
