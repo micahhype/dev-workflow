@@ -52,6 +52,7 @@ Working docs scaffold automatically under `.dev-workflow/features/<slug>/`; mult
 | `/dev-workflow:config` | Effective settings, where each came from, and which config lines are silently doing nothing |
 | `/dev-workflow:dashboard` | Local web board (127.0.0.1) of all projects: each feature's progress, the ones waiting for your approval first; phases, evidence, plan, spec, checkpoints and config on click; refreshes itself. Its only write: a guarded Mark done button |
 | `python3 <plugin>/hooks/mark_done.py <root> <slug>` | Tick every open phase of a feature you already finished as approved — or use the **Mark done** button in the dashboard drawer. The CLI refuses inside Claude Code; run it in your own terminal |
+| `python3 <plugin>/scripts/subagent_traces.py [ROOT]` | Read your Claude Code subagent transcripts (default `~/.claude/projects`) into `traces.jsonl` and print tokens and time per agent type plus which agents run together in one feature |
 | `/dev-workflow:checkpoints` | List auto-snapshots |
 | `/dev-workflow:rollback` | Restore to a checkpoint (safe, reversible) |
 
