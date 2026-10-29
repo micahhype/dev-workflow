@@ -34,6 +34,21 @@ the module you're in.
   function.
 - Never re-read a file already in your context.
 
+**Run checks cheaply** — test and lint runs are where a phase's minutes go, more
+than reading or writing code:
+- While iterating, run only the spec you changed; to fix one failing test, run it
+  alone (`-t "<name>"`, `-k`, the runner's filter). Don't chain a slow spec onto every
+  edit — batch a few edits, then run.
+- Run the broad suite ONCE, at the end, in the background with its output saved to a
+  file; lint and type-check while it runs. If it fails, read the failures from that
+  file and rerun only the failing files — never the whole suite again just to see
+  which ones failed.
+- Lint every touched file in ONE invocation (`eslint a.ts b.ts`), never a loop that
+  starts the linter per file. A baseline comparison is two invocations: now, and on
+  the stashed tree.
+- After review fixes, rerun the specs the fixes touch, not the broad suite, unless a
+  fix changed shared code.
+
 Prefer what exists: if the brief names a shared helper, base class, or extension
 point, USE it rather than writing a local variant. If you find yourself about to
 write something the project plausibly already has, look for it first — and if you
