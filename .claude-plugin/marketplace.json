@@ -1,6 +1,6 @@
 {
   "name": "dev-workflow-marketplace",
-  "owner": { "name": "tandnguyendev" },
+  "owner": { "name": "micahhype" },
   "plugins": [
     {
       "name": "dev-workflow",

@@ -6,8 +6,8 @@ Every feature runs the same disciplined gauntlet — and *you* are the final bos
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/tandnguyendev/dev-workflow/main/assets/flow-dark.svg">
-    <img alt="The feature gauntlet: detect conventions → research → solution options panel → phased plan → per-phase loop (build → AI code review, plus a security scan when the phase touches a sensitive surface → you approve) → final cross-phase audit → ship it" src="https://raw.githubusercontent.com/tandnguyendev/dev-workflow/main/assets/flow-light.svg" width="460">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/micahhype/dev-workflow/main/assets/flow-dark.svg">
+    <img alt="The feature gauntlet: detect conventions → research → solution options panel → phased plan → per-phase loop (build → AI code review, plus a security scan when the phase touches a sensitive surface → you approve) → final cross-phase audit → ship it" src="https://raw.githubusercontent.com/micahhype/dev-workflow/main/assets/flow-light.svg" width="460">
   </picture>
 </p>
 
@@ -18,7 +18,7 @@ The domain isn't hardcoded — it's read from your `conventions.md` (via `/dev-w
 ## Install
 
 ```shell
-/plugin marketplace add tandnguyendev/dev-workflow
+/plugin marketplace add micahhype/dev-workflow
 /plugin install dev-workflow@dev-workflow-marketplace
 ```
 

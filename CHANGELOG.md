@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1] - 2026-10-29
+
+### Changed
+- **The GitHub owner is now `micahhype`** (renamed from `tandnguyendev`): the plugin's author,
+  homepage and repository, the marketplace owner, and the README's install command and images.
+  GitHub redirects the old name for now; re-add the marketplace as `micahhype/dev-workflow`.
+
 ## [0.20.0] - 2026-10-29
 
 ### Added
