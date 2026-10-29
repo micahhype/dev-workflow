@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`subagent_traces.py` shows where the time goes.** Each run is split into turns, one per
+  task the agent was given (a kept-alive `coder` gets one per phase and one per review round),
+  so the wait between phases counts nowhere. Each turn records model time and tool time by kind
+  (test, lint, read, edit, other); `traces.jsonl` rows gain `active_ms`, `model_ms`, `tool_ms`,
+  `tool_calls` and `turns`. The report adds the median turn per agent and the slowest turns
+  (`--slowest N`, default 5).
+- **`subagent_traces.py --since YYYY-MM-DD`** keeps only runs started on or after that date (UTC),
+  to compare the workflow before and after a change.
+
+### Changed
+- **`coder` runs checks cheaply:** only the changed spec while iterating, the broad suite once
+  at the end in the background (failures read from its saved output, then only the failing files
+  rerun), and one linter invocation over all touched files.
+
 ## [0.19.0] - 2026-10-27
 
 ### Added

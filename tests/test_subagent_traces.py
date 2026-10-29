@@ -71,12 +71,69 @@ def test_runs_become_traces_with_per_request_usage_and_pairs(tmp_path):
         "agent": "dev-workflow:implementer", "ts": "2026-10-20T04:00:00.000Z",
         "duration_ms": 2500, "input_tokens": 2, "cache_creation_input_tokens": 100,
         "cache_read_input_tokens": 1000, "output_tokens": 155, "model": "claude-opus-5-5",
+        "active_ms": 2500, "model_ms": 1000, "tool_calls": 0,
+        "tool_ms": {"test": 0, "lint": 0, "read": 0, "edit": 0, "other": 0},
+        "turns": [{"ts": "2026-10-20T04:00:00.000Z", "duration_ms": 2500, "model_ms": 1000,
+                   "tool_calls": 0,
+                   "tool_ms": {"test": 0, "lint": 0, "read": 0, "edit": 0, "other": 0}}],
     }
     assert rows["dev-workflow:code-reviewer"]["trace_id"] == "shop:topup"
     assert rows["dev-workflow:planner"]["trace_id"] == "shop:session:s2"
     assert "1  dev-workflow:code-reviewer + dev-workflow:implementer" in result.stdout
     assert "1 filtered (non-plugin agents)" in result.stdout
     assert "2 runs with no usage" in result.stdout
+
+
+def tool_use(ts, tool_id, name, tool_input):
+    content = [{"type": "tool_use", "id": tool_id, "name": name, "input": tool_input}]
+    return {"type": "assistant", "timestamp": ts, "message": {"content": content}}
+
+
+def tool_result(ts, tool_id):
+    content = [{"type": "tool_result", "tool_use_id": tool_id, "content": "ok"}]
+    return {"type": "user", "timestamp": ts, "message": {"content": content}}
+
+
+def test_each_task_is_a_turn_with_model_and_tool_time_by_kind(tmp_path):
+    root, out = tmp_path / "projects", tmp_path / "traces.jsonl"
+    reminder = {**user("<system-reminder>hand back</system-reminder>", ts="2026-10-20T04:00:00Z"),
+                "isMeta": True}
+    review_round = {**user("Fix these", ts="2026-10-20T05:20:00Z"), "isMeta": True,
+                    "origin": {"kind": "coordinator"}}
+    make_run(root / "proj" / "s1" / "subagents" / "agent-c.jsonl", "dev-workflow:coder", [
+        user(FEATURE_PROMPT, ts="2026-10-20T04:00:00Z"),
+        reminder,
+        tool_use("2026-10-20T04:00:10Z", "t1", "Read", {"file_path": "a.ts"}),
+        tool_result("2026-10-20T04:00:11Z", "t1"),
+        tool_use("2026-10-20T04:00:20Z", "t2", "Bash", {"command": "cd /p && yarn -s jest src/a"}),
+        tool_result("2026-10-20T04:02:20Z", "t2"),
+        tool_use("2026-10-20T04:02:30Z", "t3", "Bash", {"command": "npx eslint src/a.ts"}),
+        tool_result("2026-10-20T04:03:30Z", "t3"),
+        assistant("2026-10-20T04:03:40Z", 9),
+        user("Implement Phase 2", ts="2026-10-20T05:00:00Z"),
+        tool_use("2026-10-20T05:00:30Z", "t4", "Edit", {"file_path": "a.ts"}),
+        tool_result("2026-10-20T05:00:31Z", "t4"),
+        tool_use("2026-10-20T05:00:40Z", "t5", "Bash", {"command": "sed -n 1,20p a.ts"}),
+        tool_result("2026-10-20T05:00:42Z", "t5"),
+        review_round,
+        tool_use("2026-10-20T05:20:05Z", "t6", "Bash", {"command": "make deploy"}),
+        tool_result("2026-10-20T05:20:08Z", "t6"),
+    ])
+
+    result = run(root, out, "--slowest", "1")
+
+    assert result.returncode == 0, result.stderr
+    [row] = read_rows(out)
+    phase_1, phase_2, review = row["turns"]
+    assert phase_1["duration_ms"] == 220_000
+    assert phase_1["model_ms"] == 39_000
+    assert phase_1["tool_ms"] == {"test": 120_000, "lint": 60_000, "read": 1000, "edit": 0, "other": 0}
+    assert phase_2["tool_ms"]["edit"] == 1000 and phase_2["tool_ms"]["read"] == 2000
+    assert review["ts"] == "2026-10-20T05:20:00Z" and review["tool_ms"]["other"] == 3000
+    assert row["active_ms"] == 220_000 + 42_000 + 8_000
+    assert row["tool_calls"] == 6
+    slowest = result.stdout.split("Slowest turns")[1].splitlines()[2].split()
+    assert slowest[0] == "3.7" and slowest[2] == "2.0" and slowest[-3:-1] == ["dev-workflow:coder,", "shop:topup,"]
 
 
 def test_malformed_input_is_skipped_and_counted(tmp_path):
@@ -101,8 +158,22 @@ def test_malformed_input_is_skipped_and_counted(tmp_path):
     assert sorted(rows) == ["Explore", "dev-workflow:implementer"]
     assert rows["dev-workflow:implementer"]["ts"] == "2026-10-20T04:00:01Z"
     assert rows["dev-workflow:implementer"]["output_tokens"] == 5
-    assert "6 found, 0 filtered (non-plugin agents), 2 read, 4 skipped" in result.stdout
+    assert "6 found, 0 filtered (non-plugin agents), 0 before --since, 2 read, 4 skipped" in result.stdout
     assert "2 lines skipped" in result.stdout
+
+
+def test_since_keeps_only_runs_started_on_or_after_the_date(tmp_path):
+    root, out = tmp_path / "projects", tmp_path / "traces.jsonl"
+    session = root / "proj" / "s1" / "subagents"
+    make_run(session / "agent-old.jsonl", "dev-workflow:coder", [user("a", ts="2026-10-28T23:59:59Z")])
+    make_run(session / "agent-new.jsonl", "dev-workflow:coder", [user("b", ts="2026-10-29T00:00:00Z")])
+
+    result = run(root, out, "--since", "2026-10-29")
+
+    assert result.returncode == 0, result.stderr
+    assert [row["ts"] for row in read_rows(out)] == ["2026-10-29T00:00:00Z"]
+    assert "1 before --since, 1 read" in result.stdout
+    assert run(root, out, "--since", "yesterday").returncode == 2
 
 
 def test_missing_root_exits_2(tmp_path):
