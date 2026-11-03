@@ -15,7 +15,9 @@
 <Files touched + rough lines, and what of that is NEW structure vs edits to existing
 code. Stated up front so an over-built plan is visible before it is approved.
 MACHINE-CHECKED: the plan guard refuses to end a turn while this is still the
-placeholder.>
+placeholder. When every phase's `- Size:` adds up to more than the PR cap (default
+300 lines), cut the plan into `## PRs` below, or add an `Over cap:` bullet here saying
+why it must land as one PR.>
 
 ## Structure
 > The SHAPE of the change, decided here — not left to the coder to improvise.
@@ -29,6 +31,16 @@ placeholder.>
   step lives in — e.g. `route (api/orders.ts)` → `validate (orders/schema.ts)` →
   `OrderService.create (orders/service.ts)` → `repo.insert`>
 - Deviations: <where this change departs from the pattern above and why, or "none">
+
+<!-- Only when the phases' `- Size:` total is over the PR cap (`pr_cap` in
+     `.dev-workflow/plan-guard.json`, default 300). A one-PR plan omits this section.
+     MACHINE-CHECKED: every phase sits in exactly one PR, and a PR over the cap needs
+     an `- Over cap:` reason.
+## PRs
+### PR 1 — <title>
+- Phases: <comma list, e.g. 1, 2>
+- Over cap: <only if over the cap>
+-->
 
 ## Phases
 > Order by dependency, then risk (uncertain phases early). One reviewable diff each.
@@ -46,7 +58,8 @@ placeholder.>
   quoted — not a restatement of the scope>
 - Size: <~N changed lines (added + deleted, tests included). MACHINE-CHECKED: the
   plan guard measures the phase's real diff and refuses past 2× this (min +40) until
-  `- Over budget:` in phase-log.md says why. Aim for one sitting of review.>
+  `- Over budget:` in phase-log.md says why. Required while the PR cap is on. Aim
+  for one sitting of review.>
 - Verify: <test/command/output that proves it — becomes the Evidence ledger>
 - Rollback: <checkpoint / how to revert this phase cleanly>
 

@@ -66,6 +66,8 @@ the user's call at the plan checkpoint — only whether you made the choice sile
 | Field | Where | Why it is enforced |
 |---|---|---|
 | `## Size estimate` | `plan.md`, once any phase's `- Scope:` is filled | It is what makes an over-built plan visible at the checkpoint. A plan that hides its size hides the thing the user needs to reject it. |
+| `- Size:` | every drafted phase, while the PR cap is on | The sizes are what show whether the feature fits in one PR; a plan without them would skip the cap. |
+| `## PRs` or `- Over cap:` | `plan.md`, when the phases' `- Size:` total is over the PR cap (`pr_cap` in `.dev-workflow/plan-guard.json`, default 300, `0` = off) | A diff past the cap gets skimmed, not reviewed. Each `### PR N` lists its `- Phases:`; every phase sits in one PR, and a PR over the cap carries its own `- Over cap:` reason. |
 | `- Why separate:` | every phase AFTER the first | Each extra phase costs the user an implement-review-approve round-trip. Splitting stays allowed; splitting without naming why does not. |
 | `- Unresolved:` | any `phase-log.md` phase whose `- Review rounds:` exceeds 2 | Going past the budget means coder and reviewer did not converge — that is a decision for the USER, and the extra rounds must not pass silently. |
 | `- Project map updated:` | the LAST section of a finished feature, when the project has a `project-map.md` | Stage 5 is what maintains the map — and single-phase features skip Stage 5, which is now most of them. `"no structural change"` is a complete answer; saying nothing is not. |
@@ -342,8 +344,16 @@ Reads, not a subagent.
      (Deliberately no target count: a range here reads as a quota to fill, and the
      plan comes back with the number rather than the work. If the honest answer is
      one phase for a standard feature, that is the plan.) The failure in the other
-     direction is real too — a phase too big to review in one sitting hides bugs —
-     but it is far rarer than over-splitting, and the reviewer will catch it.
+     direction is just as real: a diff too big to review in one sitting hides bugs,
+     and it is what takes control of the change away from the user.
+   - **Cut the plan into PRs when it is over the cap.** When the phases' `- Size:`
+     total is over the PR cap, add a `## PRs` section: stacked PRs, each one
+     independently mergeable, ordered prep/refactor → core + tests → wiring/UI.
+     Pieces that are not finished yet stay dormant or behind a flag until the PR
+     that wires them. A PR holds whole phases, and a phase never spans two PRs.
+     Lockfiles and generated files do not count toward `- Size:`, but the per-phase
+     diff budget still measures them, so name them on `- Over budget:`. A plan that
+     must land as one PR anyway says why on an `- Over cap:` line instead.
    - **Order by dependency, then risk.** No phase depends on something a later
      phase builds; among independent phases, schedule the risky or uncertain ones
      EARLY so the plan fails fast, not late.
@@ -406,9 +416,9 @@ Reads, not a subagent.
    other review loop: at most 2 rounds with the reviewer, then decide or take the
    disagreement to the user (see the review-round rules in Stage 4).
 5. **CHECKPOINT: present the plan, stop, get approval or edits before any code.**
-   Lead with the shape — tier, phase count, estimated files/lines — so the user can
-   say "that's too much machinery for this" BEFORE paying for it. If you cut the
-   plan down in step 3, say what you cut.
+   Lead with the shape — tier, PR count, phase count, estimated files/lines — so the
+   user can say "that's too much machinery for this" BEFORE paying for it. If you
+   cut the plan down in step 3, say what you cut.
 
 ## Stage 4 — Phased implementation (loop per phase)
 **Trivial tier: you write the code yourself — no `coder` spawn.** Use the tier as
@@ -511,8 +521,15 @@ For each phase in `plan.md`, in order:
    summary and evidence. ONLY after the user
    has actually approved, tick `[x] USER APPROVED` in `phase-log.md` and move on.
    Never tick it yourself to advance; never advance unapproved.
-5. If it's a git repo and the user wants per-phase commits, commit scoped to this
-   phase (`Phase N: <title>`). Skip otherwise. Keeps the final-audit diff clean.
+5. **With a `## PRs` section, commit per PR.** When the LAST phase of PR N is
+   approved, create or switch to branch `<slug>/pr-<N>` (PR 1 branches from the
+   current branch, PR N from `<slug>/pr-<N-1>`), commit that PR's changes, and write
+   `.dev-workflow/features/<slug>/pr-<N>.md`: What / Why / How to review (the
+   reading order, from the MUST entries of its phases' review maps) / Stacked on.
+   Never push and never run `gh pr create`; tell the user the branch and the file.
+   Once a PR is committed, that branch and commit are its rollback unit.
+   Without `## PRs`: if it's a git repo and the user wants per-phase commits, commit
+   scoped to this phase (`Phase N: <title>`). Skip otherwise.
 
 ### One artifact per criterion is NOT one test per criterion
 **Test budget.** Default is NO new test file per phase: extend the changed module's

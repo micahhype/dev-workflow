@@ -22,22 +22,24 @@ REVIEW_MAP = ("- Review map: 4 must-read / 0 skim / 10 skip of 14 changed lines\
               "  - SKIP `tests/test_orders.py` — cited as evidence\n")
 
 
-def one_phase(scope="add the page param", extra=""):
+def one_phase(scope="add the page param", extra="", size="~25"):
     return (f"# Plan: t\n\n{SIZE}"
             "### Phase 1 — do the thing\n"
             f"- Scope: {scope}\n"
             "- Files: `api/orders.py`\n"
             "- Done when: a request with no page param returns the first 20 orders\n"
+            f"- Size: {size}\n"
             "- Verify: `pytest -q tests/test_orders.py`\n"
             "- Rollback: checkpoint before the edit\n" + extra)
 
 
-def second_phase(why="<why this could NOT be merged>"):
+def second_phase(why="<why this could NOT be merged>", size="~10"):
     return ("\n### Phase 2 — the other thing\n"
             "- Scope: wire the caller\n"
             f"- Why separate: {why}\n"
             "- Files: `api/routes.py`\n"
             "- Done when: the route is registered\n"
+            f"- Size: {size}\n"
             "- Verify: `pytest -q`\n"
             "- Rollback: checkpoint\n")
 
@@ -91,7 +93,8 @@ def test_shipped_template_filled_in_passes(tmp_path):
     filled = (tpl.replace("<Files touched + rough lines, and what of that is NEW "
                           "structure vs edits to existing\ncode.",
                           "2 files, ~25 lines, no new structure. (")
-                 .replace("- Scope: <what this phase does>", "- Scope: add the page param"))
+                 .replace("- Scope: <what this phase does>", "- Scope: add the page param")
+                 .replace("- Size: <~N changed lines", "- Size: ~25 changed lines. ("))
     proc = stop(tmp_path, plan=filled)
     assert hook_json(proc) is None, reason(proc)
 
@@ -285,7 +288,7 @@ def test_a_phase_not_yet_reviewed_needs_no_map(tmp_path):
 # --- phase Size against the lines actually changed ---------------------------
 
 def budget_plan(size="~10 lines"):
-    return one_phase().replace("- Verify:", f"- Size: {size}\n- Verify:")
+    return one_phase(size=size)
 
 
 def coded_log(coded=True, over_budget=None):
@@ -301,8 +304,7 @@ def grow(repo, lines):
 
 
 def test_phase_estimates_reads_each_phases_size():
-    plan = budget_plan("~1,200 lines") + second_phase("own rollback").replace(
-        "- Verify:", "- Size: 30\n- Verify:")
+    plan = budget_plan("~1,200 lines") + second_phase("own rollback", size="30")
     assert plan_guard.phase_estimates(plan) == {1: 1200, 2: 30}
 
 
@@ -337,7 +339,7 @@ def test_a_phase_first_seen_already_coded_is_not_measured(git_repo):
 
 
 def test_the_next_phase_coded_in_the_approval_turn_starts_from_the_last_stop(git_repo):
-    two = budget_plan() + second_phase("own rollback").replace("- Verify:", "- Size: 10\n- Verify:")
+    two = budget_plan() + second_phase("own rollback", size="10")
     first_current = ("# Phase log: t\n\n## Phase 1 — do the thing\n"
                      "- Status: [x] coded  [ ] code-reviewed  [ ] security-scanned  [ ] USER APPROVED\n"
                      "- Evidence:\n\n## Phase 2 — the other thing\n"
@@ -352,6 +354,87 @@ def test_the_next_phase_coded_in_the_approval_turn_starts_from_the_last_stop(git
     assert hook_json(proc) is None, reason(proc)
     recorded = diff_budget.load(str(git_repo))["f"]
     assert recorded["phase"] == "Phase 2 — the other thing" and recorded["lines"] == 1
+
+
+# --- the PR cap: a feature bigger than one reviewable PR is cut into PRs --------
+
+def big_plan(prs=""):
+    return (one_phase(size="~200") + second_phase("own rollback", size="~150")).replace(
+        "### Phase 1", prs + "### Phase 1", 1)
+
+
+def pr_block(number, phases, over_cap=""):
+    return (f"### PR {number} — part {number}\n- Phases: {phases}\n"
+            + (f"- Over cap: {over_cap}\n" if over_cap else "") + "\n")
+
+
+def test_a_plan_over_the_cap_without_prs_is_refused(tmp_path):
+    proc = stop(tmp_path, plan=big_plan())
+    assert blocked(proc) and "~350 lines" in reason(proc) and "## PRs" in reason(proc)
+
+
+def test_an_over_cap_reason_in_the_size_estimate_passes_but_none_does_not():
+    with_reason = big_plan().replace(SIZE, SIZE + "- Over cap: the schema and its readers ship together\n\n")
+    assert plan_guard.pr_findings(with_reason, 300) == []
+    with_none = big_plan().replace(SIZE, SIZE + "- Over cap: none\n\n")
+    assert plan_guard.pr_findings(with_none, 300) != []
+
+
+def test_plan_cut_into_prs_under_the_cap_passes():
+    prs = "## PRs\n" + pr_block(1, "1") + pr_block(2, "2")
+    assert plan_guard.pr_findings(big_plan(prs), 300) == []
+
+
+def test_a_pr_over_the_cap_needs_its_own_reason():
+    over = plan_guard.pr_findings(big_plan("## PRs\n" + pr_block(1, "1, 2")), 300)
+    assert len(over) == 1 and "'PR 1 — part 1' totals ~350" in over[0]
+    excused = big_plan("## PRs\n" + pr_block(1, "1, 2", "one migration, one release"))
+    assert plan_guard.pr_findings(excused, 300) == []
+
+
+def test_a_phase_in_no_pr_is_refused():
+    findings = plan_guard.pr_findings(big_plan("## PRs\n" + pr_block(1, "1")), 300)
+    assert len(findings) == 1 and "Phases in no PR: 2" in findings[0]
+
+
+def test_a_phase_in_two_prs_is_refused():
+    prs = "## PRs\n" + pr_block(1, "1") + pr_block(2, "1, 2")
+    findings = plan_guard.pr_findings(big_plan(prs), 400)
+    assert findings == ["Phase 1 is listed in more than one PR: PR 1 — part 1; PR 2 — part 2. "
+                        "A phase belongs to exactly one PR."]
+
+
+def test_a_pr_listing_a_phase_the_plan_does_not_have_is_refused():
+    prs = "## PRs\n" + pr_block(1, "1") + pr_block(2, "2, 3")
+    findings = plan_guard.pr_findings(big_plan(prs), 300)
+    assert findings == ["'PR 2 — part 2' lists phase 3, which the plan does not have."]
+
+
+def test_the_templates_commented_prs_example_is_not_a_prs_section():
+    commented = "<!--\n## PRs\n" + pr_block(1, "1") + pr_block(2, "2") + "-->\n"
+    assert "~350 lines" in plan_guard.pr_findings(big_plan(commented), 300)[0]
+
+
+def test_a_phase_without_a_size_is_refused_while_the_cap_is_on(tmp_path):
+    plan = one_phase().replace("- Size: ~25\n", "")
+    proc = stop(tmp_path, plan=plan)
+    assert blocked(proc) and "no `- Size:` estimate: Phase 1" in reason(proc)
+    assert plan_guard.pr_findings(plan, 0) == []
+
+
+def test_cap_zero_in_the_config_turns_the_check_off(tmp_path):
+    (tmp_path / ".dev-workflow").mkdir()
+    (tmp_path / ".dev-workflow" / "plan-guard.json").write_text('{"pr_cap": 0}')
+    proc = stop(tmp_path, plan=big_plan())
+    assert hook_json(proc) is None, reason(proc)
+
+
+@pytest.mark.parametrize("body", ['{"pr_cap": -5}', '{"pr_cap": true}', '{"pr_cap": "0"}',
+                                  '{"pr_cap": 1.5}', "[0]", "{not json"])
+def test_a_bad_config_falls_back_to_the_default_cap(tmp_path, body):
+    (tmp_path / ".dev-workflow").mkdir()
+    (tmp_path / ".dev-workflow" / "plan-guard.json").write_text(body)
+    assert plan_guard.load_config(str(tmp_path)) == {"pr_cap": 300}
 
 
 # --- bounding, so it cannot trap the turn -----------------------------------

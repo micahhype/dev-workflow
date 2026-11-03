@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **A feature lands as small stacked PRs, not one big diff.** The plan guard sums the phases'
+  `- Size:` estimates and refuses a plan over the PR cap (`pr_cap` in
+  `.dev-workflow/plan-guard.json`, default 300, `0` = off) unless it is cut into `### PR N`
+  blocks under `## PRs`, each at or under the cap or with an `- Over cap:` reason, or a one-PR
+  plan says why on `- Over cap:`. While the cap is on, every phase needs a `- Size:`.
+  `/dev-workflow:config` shows and sets `plan-guard.pr_cap`.
+- **Commit per PR.** When a PR's last phase is approved, the feature skill commits it on branch
+  `<slug>/pr-<N>` (stacked on `pr-<N-1>`) and writes `pr-<N>.md` with what, why and a reading
+  order. It never pushes or runs `gh pr create`.
+
+### Changed
+- **The plan guard's refusal counter moved to `.dev-workflow/plan-guard-state.json`**, so
+  `plan-guard.json` holds only configuration. Old `*::plan` keys left in
+  `.dev-workflow/plan-guard.json` are no longer read and can be deleted.
+
 ## [0.20.1] - 2026-10-29
 
 ### Changed

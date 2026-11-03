@@ -43,7 +43,8 @@ python3 "${CLAUDE_SKILL_DIR}/../../hooks/config.py" set <key> <value>
 
 Keys: `comment-guard.enabled`, `comment-guard.density.floor`,
 `comment-guard.density.min_ratio`, `comment-guard.max_block`, `test-guard.enabled`, `test-guard.checks.fakes`,
-`test-guard.checks.assertions`, `test-guard.max_empty_args`, `models.<agent>`.
+`test-guard.checks.assertions`, `test-guard.max_empty_args`, `plan-guard.pr_cap` (`0` = off),
+`models.<agent>`.
 Values: `on` / `off`, a number, a model alias (`opus`, `sonnet`, `haiku`, `fable`,
 `inherit`) or a `claude-*` id, or `default` to drop the key.
 

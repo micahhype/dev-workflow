@@ -30,6 +30,9 @@ visible instead of silent. So this gate refuses to let a turn end when:
      spares the user reading the whole diff, so it must exist before they approve.
   7. The current phase's diff outgrew its plan `- Size:` budget and `- Over budget:`
      does not say why — a diff too big to review is the bottleneck this prevents.
+  8. The phases' `- Size:` estimates add up to more than one PR's worth (`pr_cap`,
+     default 300 lines) and the plan neither cuts them into `## PRs` nor gives an
+     `- Over cap:` reason. With the cap on, every drafted phase needs a `- Size:`.
 
 Like the evidence gate, this raises the floor; it cannot judge whether what was
 written is TRUE. "Because it is separate" satisfies (2) — it is the user reading
@@ -46,13 +49,15 @@ import sys
 
 import _workflow
 import diff_budget
-from _workflow import docs_dir, field_text, is_unfilled, iter_phases, read
+from _workflow import STATE_DIR, docs_dir, field_text, is_unfilled, iter_phases, read
 
 # `#{2,3}` because the template writes `### Phase 1 — ...` but a hand-written plan
 # often uses `##`; `\b` keeps the `## Phases` container heading from matching.
 PLAN_PHASE = re.compile(r"^#{2,3}[ \t]+Phase\b[^\n]*$", re.MULTILINE | re.IGNORECASE)
 SIZE_HEADING = re.compile(r"^#{2,3}[ \t]+Size estimate[ \t]*$", re.MULTILINE | re.IGNORECASE)
 ANY_HEADING = re.compile(r"^#{1,3}[ \t]+", re.MULTILINE)
+PRS_HEADING = re.compile(r"^#{2,3}[ \t]+PRs[ \t]*$", re.MULTILINE | re.IGNORECASE)
+PR_BLOCK = re.compile(r"^###[ \t]+PR[ \t]+\d+[^\n]*$", re.MULTILINE)
 ROUNDS_NUM = re.compile(r"(\d+)")
 PHASE_NUM = re.compile(r"^Phase\s+(\d+)", re.IGNORECASE)
 CODED = re.compile(r"\[[xX]\]\s*coded")
@@ -64,7 +69,9 @@ MAX_ROUNDS = 2  # keep in step with the review-round budget in skills/feature/SK
 MAX_BLOCKS = 3
 BUDGET_FACTOR = 2
 BUDGET_SLACK = 40  # lines; a 10-line estimate should not refuse a 25-line phase
-COUNTER_FILE = "plan-guard.json"
+PR_CAP = 300  # changed lines one reviewer can hold in a single PR
+CONFIG_NAME = "plan-guard.json"
+COUNTER_FILE = "plan-guard-state.json"
 
 # Content that is present but not part of the plan. The template ships a
 # commented-out `### Phase 2` block to copy, and a plan may quote a heading inside a
@@ -127,6 +134,105 @@ def plan_findings(plan):
                 "boundary / needs its own rollback point / too big to review in one "
                 "sitting). If there is no such reason, merge it.")
     return out
+
+
+def load_config(root):
+    """{'pr_cap'} — the default on any problem, so a malformed file never lifts the cap."""
+    cfg = {"pr_cap": PR_CAP}
+    try:
+        obj = json.loads(read(os.path.join(root, STATE_DIR, CONFIG_NAME)) or "{}")
+    except Exception:
+        return cfg
+    cap = obj.get("pr_cap") if isinstance(obj, dict) else None
+    if isinstance(cap, int) and not isinstance(cap, bool) and cap >= 0:
+        cfg["pr_cap"] = cap
+    return cfg
+
+
+def pr_findings(plan, cap):
+    """A drafted plan bigger than one reviewable PR that was not cut into PRs."""
+    plan = strip_noise(plan)
+    drafted = [t for t, b in iter_plan_phases(plan) if not is_unfilled(field_text(b, "Scope"))]
+    if not cap or not drafted:
+        return []
+
+    estimates = phase_estimates(plan)
+    unsized = [t for t in drafted if phase_number(t) not in estimates]
+    if unsized:
+        return ["These phases have no `- Size:` estimate: " + "; ".join(unsized) +
+                f". With the PR cap on ({cap} lines) every phase needs one — the sizes "
+                "are what show whether the feature fits in one reviewable PR."]
+    if PRS_HEADING.search(plan):
+        return pr_block_findings(plan, estimates, cap)
+
+    total = sum(estimates.values())
+    if total <= cap or has_reason(section_text(plan, SIZE_HEADING), "Over cap"):
+        return []
+    return [f"The phases' `- Size:` estimates total ~{total} lines, over the PR cap of "
+            f"{cap}. A diff that big is reviewed by skimming. Cut the plan into stacked "
+            "PRs under a `## PRs` section (`### PR N — <title>` with `- Phases: 1, 2`), "
+            "or, if it must land as one PR, say why on an `- Over cap:` line in "
+            "`## Size estimate`."]
+
+
+def pr_block_findings(plan, estimates, cap):
+    findings = []
+    prs_by_phase = {}
+    for title, body in iter_pr_blocks(plan):
+        phases = pr_phases(body)
+        for number in phases:
+            prs_by_phase.setdefault(number, []).append(title)
+        findings += unknown_phase_findings(title, phases - set(estimates))
+        total = sum(estimates.get(number, 0) for number in phases)
+        if total > cap and not has_reason(body, "Over cap"):
+            findings.append(f"'{title}' totals ~{total} lines, over the PR cap of {cap}. "
+                            "Move a phase into another PR, or say why it must land "
+                            "together on an `- Over cap:` line in its block.")
+    findings += shared_phase_findings(prs_by_phase)
+    orphans = sorted(set(estimates) - set(prs_by_phase))
+    if orphans:
+        findings.append("Phases in no PR: " + ", ".join(str(n) for n in orphans) +
+                        ". With a `## PRs` section every phase belongs to exactly one "
+                        "PR's `- Phases:` line.")
+    return findings
+
+
+def unknown_phase_findings(title, unknown):
+    return [f"'{title}' lists phase {number}, which the plan does not have."
+            for number in sorted(unknown)]
+
+
+def shared_phase_findings(prs_by_phase):
+    shared = {number: titles for number, titles in prs_by_phase.items() if len(titles) > 1}
+    return [f"Phase {number} is listed in more than one PR: " + "; ".join(titles) +
+            ". A phase belongs to exactly one PR."
+            for number, titles in sorted(shared.items())]
+
+
+def iter_pr_blocks(plan):
+    """Yield (title, body) per `### PR N` block; a body ends at the next heading."""
+    for head in PR_BLOCK.finditer(plan):
+        rest = plan[head.end():]
+        nxt = ANY_HEADING.search(rest)
+        yield head.group(0).lstrip("# \t").strip(), rest[:nxt.start()] if nxt else rest
+
+
+def pr_phases(body):
+    listed = field_text(body, "Phases")
+    if is_unfilled(listed):
+        return set()
+    return {int(number) for number in re.findall(r"\d+", listed)}
+
+
+def phase_number(title):
+    number = PHASE_NUM.match(title)
+    return int(number.group(1)) if number else None
+
+
+def has_reason(body, field):
+    """A filled `- <field>:` line; "none" and "n/a" say there is no reason."""
+    reason = field_text(body or "", field)
+    return not is_unfilled(reason) and reason.strip().lower() not in ("none", "n/a")
 
 
 def budget_findings(log):
@@ -246,8 +352,7 @@ def diff_budget_findings(root, slug, plan, log):
         return []  # git trouble must not trap the turn
     if lines is None or lines <= budget_limit(estimate):
         return []
-    reason = field_text(body, "Over budget")
-    if not is_unfilled(reason) and reason.strip().lower() not in ("none", "n/a"):
+    if has_reason(body, "Over budget"):
         return []
     return [f"'{title}' has changed {lines} lines; its plan `- Size:` budgeted ~{estimate} "
             f"(limit {budget_limit(estimate)}). A diff this size is what makes the user's "
@@ -269,6 +374,7 @@ def main():
     plan = read(os.path.join(ddir, "plan.md"))
     if plan:
         findings += plan_findings(plan)
+        findings += pr_findings(plan, load_config(root)["pr_cap"])
     log = read(os.path.join(ddir, "phase-log.md"))
     if log:
         findings += budget_findings(log)

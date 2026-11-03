@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import HOOKS
+from conftest import HOOKS, run_hook
 
 sys.path.insert(0, HOOKS)
 import config  # noqa: E402
@@ -231,6 +231,23 @@ def test_set_round_trips_through_show(tmp_path):
     run(tmp_path, "set", "test-guard.checks.assertions", "off")
     assert line_for(run(tmp_path, "show").stdout, "checks.assertions") == \
         "checks.assertions off < file"
+
+
+def test_plan_guard_cap_is_set_and_shown_with_its_source(tmp_path):
+    assert line_for(run(tmp_path, "show").stdout, "pr_cap") == "pr_cap 300 default"
+    run(tmp_path, "set", "plan-guard.pr_cap", "0")
+    assert read_cfg(tmp_path, "plan-guard.json") == {"pr_cap": 0}
+    assert line_for(run(tmp_path, "show").stdout, "pr_cap") == "pr_cap 0 < file"
+
+
+def test_the_plan_guards_refusal_counter_is_not_read_as_config(tmp_path):
+    feature = tmp_path / ".dev-workflow" / "features" / "f"
+    feature.mkdir(parents=True)
+    (tmp_path / ".dev-workflow" / "active").write_text("f\n")
+    (feature / "plan.md").write_text("### Phase 1 — x\n- Scope: something\n")
+    run_hook("plan_guard.py", {}, project_dir=tmp_path)
+    assert (tmp_path / ".dev-workflow" / "plan-guard-state.json").exists()
+    assert "PROBLEMS" not in run(tmp_path, "show").stdout
 
 
 # --- entry ------------------------------------------------------------------
