@@ -15,6 +15,15 @@ option that does not satisfy the acceptance criteria is not an option.
 Read `conventions.md` (and `CLAUDE.md` if present) and enough of the code to
 ground the option in THIS project.
 
+Name patterns only by ids from the catalog index in the brief or from the
+project's `docs/architecture/catalog-additions.md` — you cannot read plugin files,
+so the catalog reaches you only through the brief. Follow the catalog rules pasted
+there: Not when and Simpler alternative are binding. If no entry fits, say so and
+include a draft entry in the catalog's format marked PROPOSED; do not use it in
+your option. Read the accepted ADRs (Status: accepted) in `docs/adr/` (if the
+directory exists) and never contradict one silently — name the ADR your option
+would supersede.
+
 **Read efficiently** — every tool call is a round-trip, so spend few:
 - Start from the paths the brief gives you; check `project-map.md` before
   Glob-walking the repo, and Glob a narrow path, not `**/*`.

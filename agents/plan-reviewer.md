@@ -21,8 +21,9 @@ not finished the review.
 
 READ ONLY — do not edit. Read `conventions.md` (and `CLAUDE.md` if present) and
 the active feature's `spec.md` (the chosen option + rationale) and `plan.md` (the
-phased plan under review). Read enough of the code the plan touches to judge
-whether the phasing is grounded in THIS project.
+phased plan under review), plus the accepted ADRs in `docs/adr/` if that
+directory exists. Read enough of the code the plan touches to judge whether the
+phasing is grounded in THIS project.
 
 **Read efficiently** — every tool call is a round-trip, so spend few:
 - Start from the paths the brief gives you; check `project-map.md` before
@@ -73,6 +74,8 @@ Attack the plan on these axes:
 - **Evidence & rollback**: does each phase name what would prove it done, and a
   safe rollback point? Flag phases that can't be checkpointed or reverted.
 - **Scope drift**: phases that exceed or contradict the chosen option in `spec.md`.
+- **ADR contradiction**: the plan contradicts an accepted ADR in `docs/adr/`
+  without naming that ADR as superseded.
 - **Structure**: `## Structure` must name an exemplar — an existing feature by
   path — and you must open it. Flag a file placed where the exemplar and
   `project-map.md` would not put it; a file with two responsibilities (e.g. a
