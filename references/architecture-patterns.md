@@ -5,20 +5,19 @@ this catalog; they never name a pattern outside it. Sources: Azure Cloud Design
 Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 
 ## Rules
-- Entry format: `### <id> — <Name>: <what it solves>`, then seven bullets in order:
-  Signals, Not when, Cost, Pairs with, Conflicts with, Overuse smell, Simpler
-  alternative. Ids are stable — designs and ADRs cite them; never rename one.
-  Pairs with, Conflicts with and Simpler alternative are `none` or backticked ids
-  from this catalog or the additions.
-- "Not when" and "Simpler alternative" are BINDING: a pick that hits a Not when
-  line is rejected, and its Simpler alternative must be tried first.
+- Entry format: `### <id> — <Name>: <what it solves>`, then six bullets in order:
+  Signals, Not when, Cost, Pairs with, Conflicts with, Overuse smell. Ids are
+  stable — designs and ADRs cite them; never rename one. Pairs with and Conflicts
+  with are `none` or backticked ids from this catalog or the additions.
+- "Not when" is BINDING: a pick that hits a Not when line is rejected. When that
+  line names another entry, that entry is the option for that case; try it first
+  when it is the cheaper one.
 - When no Signals line matches, pick nothing — a design with no pattern is
-  valid. `Simpler alternative: none` means the cheaper option is not using the
-  pattern at all.
+  valid.
 - Conflicts with: alternatives for the same concern at the same boundary — never
   apply both to one boundary.
 - Each pick cites the user-sourced NFR or symptom that matched its Signals line,
-  and why its Simpler alternative lost.
+  and why the cheaper entry its Not when names (if any) lost.
 - At most 5 picks; zero is valid.
 - Project-local additions live in the project's
   `docs/architecture/catalog-additions.md`, in this same format. An addition's id
@@ -29,7 +28,7 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Briefing an architect: give the full index (`grep '^### '` of this catalog and
   of the project's catalog-additions.md), plus the full text of the candidates —
   entries whose Signals match an NFR or symptom in the criteria or research — and
-  of each candidate's Simpler-alternative ids, and this Rules section. The
+  of each entry a candidate's Not when names, and this Rules section. The
   architect may cite any index id; the orchestrator checks a cited id it did not
   expand against the full entry (Signals, Not when) before it reaches the user.
 
@@ -42,7 +41,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `service-layer`, `repository`
 - Conflicts with: `microservices`
 - Overuse smell: layers that only delegate, adding files without adding rules.
-- Simpler alternative: none
 
 ### modular-monolith — Modular monolith: one deployable split into modules with enforced boundaries
 - Signals: 2-3 teams in one codebase stepping on each other; boundaries are known but independent scaling is not needed.
@@ -51,34 +49,30 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `hexagonal`, `anti-corruption-layer`, `strangler-fig`
 - Conflicts with: `microservices`
 - Overuse smell: modules that call each other's internals or share tables freely.
-- Simpler alternative: `layered`
 
 ### hexagonal — Hexagonal (ports & adapters): isolates the domain from frameworks and I/O
 - Signals: the domain must run against 2+ production adapters per port (DB, queue, UI; test doubles don't count); vendor swap is a stated NFR.
-- Not when: a single adapter per port with no planned swap; CRUD with little domain logic.
+- Not when: a single adapter per port with no planned swap; CRUD with little domain logic — use `layered`.
 - Cost: an interface per port and mapping code at every boundary.
 - Pairs with: `adapter`, `dependency-injection`, `repository`
 - Conflicts with: none
 - Overuse smell: ports with exactly one adapter and no test double using them.
-- Simpler alternative: `layered`
 
 ### microservices — Microservices: independently deployable services per business capability
 - Signals: ≥ 3 teams needing independent deploys; components with measurably different scaling or availability needs.
-- Not when: fewer than ~3 teams; no independent scaling need; domain boundaries still unclear; no ops capacity for distributed tracing and CI per service.
+- Not when: fewer than ~3 teams; no independent scaling need; domain boundaries still unclear; no ops capacity for distributed tracing and CI per service — start with `modular-monolith`.
 - Cost: network calls, distributed data consistency, per-service CI/CD, observability, and on-call burden.
 - Pairs with: `database-per-service`, `api-gateway`, `saga`, `circuit-breaker`
 - Conflicts with: `layered`, `modular-monolith`
 - Overuse smell: services that must deploy together, or one request fanning out to many services synchronously.
-- Simpler alternative: `modular-monolith`
 
 ### backends-for-frontends — Backends for frontends: one backend per client type
 - Signals: 2+ client types (web, mobile, partner) with diverging payloads or release cadence; one client's needs keep breaking another's.
-- Not when: a single client, or clients that consume the same shapes.
+- Not when: a single client, or clients that consume the same shapes — one `api-gateway` (or none) is enough.
 - Cost: one more service per client; duplicated logic across BFFs.
 - Pairs with: `api-gateway`, `microservices`
 - Conflicts with: none
 - Overuse smell: BFFs holding business rules instead of shaping responses.
-- Simpler alternative: `api-gateway`
 
 ### api-gateway — API gateway: single entry point for routing, aggregation and offloading (auth, TLS, rate limits)
 - Signals: clients call ≥ 3 backend services directly; cross-cutting concerns (auth, TLS, throttling) duplicated per service.
@@ -87,18 +81,16 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `microservices`, `rate-limiting`, `federated-identity`
 - Conflicts with: none
 - Overuse smell: business logic and orchestration living in the gateway.
-- Simpler alternative: none
 
 ## Data
 
 ### database-per-service — Database per service (vs shared database): each service owns its data
 - Signals: services must deploy and change schema independently; one service's load degrades others via the shared DB.
-- Not when: a monolith or modular monolith; queries need cross-entity ACID transactions that cannot be split.
+- Not when: a monolith or `modular-monolith`; queries need cross-entity ACID transactions that cannot be split.
 - Cost: no cross-service joins or transactions; data duplication and eventual consistency.
 - Pairs with: `microservices`, `saga`, `transactional-outbox`, `materialized-view`
 - Conflicts with: none
 - Overuse smell: services reading each other's databases "just this once".
-- Simpler alternative: `modular-monolith`
 
 ### cache-aside — Cache-aside: load data into a cache on demand
 - Signals: p95 read latency over budget AND read:write > 10:1 on the same keys; a hot data store under read load.
@@ -107,25 +99,22 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `static-content-cdn`, `repository`
 - Conflicts with: none
 - Overuse smell: caching values that are cheap to compute or rarely re-read.
-- Simpler alternative: none
 
 ### materialized-view — Materialized view: precompute a read-optimised projection
 - Signals: a query joins or aggregates across many records/stores and misses its latency budget; the read shape differs from the write shape.
-- Not when: the source data changes faster than the view can be refreshed; a DB index fixes the query.
+- Not when: the source data changes faster than the view can be refreshed; a DB index or `cache-aside` fixes the read.
 - Cost: refresh jobs or event handlers; stale data between refreshes; storage.
 - Pairs with: `cqrs`, `event-sourcing`, `database-per-service`
 - Conflicts with: none
 - Overuse smell: a view per screen, each refreshed separately.
-- Simpler alternative: `cache-aside`
 
 ### cqrs — CQRS: separate models for writes (commands) and reads (queries)
 - Signals: read and write loads differ by > 10× and need separate scaling; read models need shapes the write model cannot serve.
-- Not when: simple CRUD; one team, one model that serves both sides acceptably.
+- Not when: simple CRUD; one team, one model that serves both sides acceptably; a `materialized-view` covers the read side.
 - Cost: two models to keep in sync; eventual consistency visible to users.
 - Pairs with: `event-sourcing`, `materialized-view`
 - Conflicts with: none
 - Overuse smell: CQRS across a whole system instead of the one bounded context that needs it.
-- Simpler alternative: `materialized-view`
 
 ### event-sourcing — Event sourcing: store state as an append-only log of events
 - Signals: a full audit trail of every change is a stated requirement; state must be rebuilt as of any past point in time.
@@ -134,7 +123,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `cqrs`, `materialized-view`, `publish-subscribe`
 - Conflicts with: none
 - Overuse smell: events named after CRUD ops (`RowUpdated`) rather than domain facts.
-- Simpler alternative: none
 
 ### sharding — Sharding: split a data store horizontally by a partition key
 - Signals: a single node's storage or write throughput is measured near its ceiling after vertical scaling and indexing.
@@ -143,7 +131,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `database-per-service`
 - Conflicts with: none
 - Overuse smell: sharding before trying read replicas, indexes or a bigger instance.
-- Simpler alternative: none
 
 ### transactional-outbox — Transactional outbox: write the event in the same DB transaction as the state change
 - Signals: a state change must reliably publish a message; lost or phantom events have been observed (dual write).
@@ -152,7 +139,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `idempotent-consumer`, `publish-subscribe`, `saga`
 - Conflicts with: none
 - Overuse smell: outbox for messages nobody needs reliably.
-- Simpler alternative: none
 
 ### idempotent-consumer — Idempotent consumer: process a duplicated message safely
 - Signals: delivery is at-least-once (most brokers, retries, outbox); duplicate side effects observed or unacceptable.
@@ -161,7 +147,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `transactional-outbox`, `retry-with-backoff`, `queue-load-leveling`
 - Conflicts with: none
 - Overuse smell: a dedup table in front of an operation that is already an upsert.
-- Simpler alternative: none
 
 ## Messaging
 
@@ -172,7 +157,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `transactional-outbox`, `idempotent-consumer`, `observer`
 - Conflicts with: none
 - Overuse smell: events used as hidden remote procedure calls awaiting replies.
-- Simpler alternative: `observer`
 
 ### queue-load-leveling — Queue-based load leveling (+ competing consumers): buffer bursts through a queue
 - Signals: traffic bursts exceed the downstream's measured capacity; work can finish later than the request.
@@ -181,7 +165,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `idempotent-consumer`, `async-request-reply`, `rate-limiting`
 - Conflicts with: none
 - Overuse smell: a queue between two in-process components.
-- Simpler alternative: `rate-limiting`
 
 ### async-request-reply — Asynchronous request-reply: accept now, deliver the result later via polling or callback
 - Signals: an operation takes longer than the client or gateway timeout (e.g. > 30 s); clients can poll or receive a callback.
@@ -190,7 +173,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `queue-load-leveling`
 - Conflicts with: none
 - Overuse smell: async endpoints for calls that return in milliseconds.
-- Simpler alternative: none
 
 ### saga — Saga (orchestration vs choreography): a cross-service transaction as local steps with compensations
 - Signals: one business transaction spans ≥ 2 services with their own databases; partial failure must be undone.
@@ -199,16 +181,14 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `database-per-service`, `transactional-outbox`, `idempotent-consumer`
 - Conflicts with: none
 - Overuse smell: choreography chains so long nobody can tell the flow; compensations that cannot actually undo.
-- Simpler alternative: `unit-of-work`
 
 ### anti-corruption-layer — Anti-corruption layer: translate between your model and a legacy or foreign one
 - Signals: integrating a legacy or third-party system whose model would leak into yours; migrating off that system.
-- Not when: the external model already matches yours; a one-field mapping.
+- Not when: the external model already matches yours; a one-field mapping (an `adapter` is enough).
 - Cost: a translation layer to maintain and test; added latency if a separate service.
 - Pairs with: `strangler-fig`, `adapter`, `facade`
 - Conflicts with: none
 - Overuse smell: an ACL between two of your own modules that share a model.
-- Simpler alternative: `adapter`
 
 ## Resilience
 
@@ -219,7 +199,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `circuit-breaker`, `idempotent-consumer`
 - Conflicts with: none
 - Overuse smell: retries stacked at every layer, multiplying load.
-- Simpler alternative: none
 
 ### circuit-breaker — Circuit breaker: stop calling a failing dependency for a while
 - Signals: downstream timeouts or error rate spike and callers pile up threads/connections waiting on it.
@@ -228,16 +207,14 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `retry-with-backoff`, `bulkhead`, `health-endpoint`
 - Conflicts with: none
 - Overuse smell: breakers with untested fallbacks, or thresholds nobody tuned.
-- Simpler alternative: none
 
 ### bulkhead — Bulkhead: isolate resources per dependency or tenant
 - Signals: one slow dependency or noisy tenant exhausts a shared pool and takes down unrelated features.
-- Not when: one dependency; the shared pool has never saturated.
+- Not when: one dependency (a `circuit-breaker` is enough); the shared pool has never saturated.
 - Cost: pools sized per partition; idle capacity.
 - Pairs with: `circuit-breaker`, `rate-limiting`
 - Conflicts with: none
 - Overuse smell: a pool per call site, each too small to absorb normal bursts.
-- Simpler alternative: `circuit-breaker`
 
 ### rate-limiting — Rate limiting (throttling): cap request rate per client or overall
 - Signals: abusive or bursty clients degrade service for others; a downstream quota must be respected.
@@ -246,7 +223,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `api-gateway`, `queue-load-leveling`, `bulkhead`
 - Conflicts with: none
 - Overuse smell: limits so low that legitimate traffic gets 429s.
-- Simpler alternative: none
 
 ### health-endpoint — Health endpoint monitoring: expose liveness/readiness for orchestrators and monitors
 - Signals: an orchestrator or load balancer routes traffic to instances; failures need detecting without user reports.
@@ -255,7 +231,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `circuit-breaker`
 - Conflicts with: none
 - Overuse smell: a readiness check that fails when any downstream blips.
-- Simpler alternative: none
 
 ## Edge & security
 
@@ -266,7 +241,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `cache-aside`, `valet-key`
 - Conflicts with: none
 - Overuse smell: putting authenticated per-user responses behind the CDN.
-- Simpler alternative: none
 
 ### valet-key — Valet key (presigned URLs): let clients access storage directly with a scoped token
 - Signals: large uploads/downloads proxied through app servers consume their bandwidth or memory.
@@ -275,7 +249,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `static-content-cdn`, `federated-identity`
 - Conflicts with: none
 - Overuse smell: long-lived or over-scoped presigned URLs.
-- Simpler alternative: none
 
 ### federated-identity — Federated identity: delegate authentication to an identity provider
 - Signals: SSO across apps is required; enterprise customers bring their own IdP; storing passwords is unwanted.
@@ -284,18 +257,16 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `api-gateway`, `valet-key`
 - Conflicts with: none
 - Overuse smell: custom token formats layered on top of the IdP's.
-- Simpler alternative: none
 
 ## Migration
 
 ### strangler-fig — Strangler fig: replace a legacy system piece by piece behind a routing facade
 - Signals: a legacy system must be replaced while it keeps serving traffic; a big-bang rewrite is too risky.
-- Not when: the system is small enough to replace in one release; requests cannot be intercepted.
+- Not when: the system is small enough to replace in one release; requests cannot be intercepted (use `branch-by-abstraction`).
 - Cost: running old and new side by side; routing and data sync during the migration.
 - Pairs with: `anti-corruption-layer`, `feature-toggles`, `facade`
 - Conflicts with: none
 - Overuse smell: a migration with no end date where both systems live forever.
-- Simpler alternative: `branch-by-abstraction`
 
 ### parallel-change — Parallel change (expand-contract): change an interface or schema in backward-compatible steps
 - Signals: a schema or API change with consumers that cannot deploy in lockstep; zero-downtime deploys required.
@@ -304,7 +275,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `feature-toggles`
 - Conflicts with: none
 - Overuse smell: expand steps that never get their contract step.
-- Simpler alternative: none
 
 ### feature-toggles — Feature toggles: ship code dark and switch behaviour at runtime
 - Signals: unfinished work must merge to trunk; a rollout must be gradual or instantly reversible.
@@ -313,7 +283,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `parallel-change`, `branch-by-abstraction`, `strangler-fig`
 - Conflicts with: none
 - Overuse smell: toggles older than a few releases, or toggles nested in toggles.
-- Simpler alternative: none
 
 ### branch-by-abstraction — Branch by abstraction: swap an implementation behind an interface on trunk
 - Signals: a large internal component must be replaced over many commits without a long-lived branch.
@@ -322,7 +291,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `feature-toggles`, `strategy`, `dependency-injection`
 - Conflicts with: none
 - Overuse smell: the abstraction outliving the migration with one implementation.
-- Simpler alternative: none
 
 ## Code — creational
 
@@ -333,7 +301,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `strategy`, `dependency-injection`
 - Conflicts with: none
 - Overuse smell: factories that only call one constructor.
-- Simpler alternative: none
 
 ### builder — Builder: construct a complex object step by step
 - Signals: a constructor takes many optional parameters, or construction needs validation across fields.
@@ -342,7 +309,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `factory-method`
 - Conflicts with: none
 - Overuse smell: builders for value objects with two fields.
-- Simpler alternative: none
 
 ### dependency-injection — Dependency injection: pass collaborators in instead of creating them inside
 - Signals: a class must be tested without its real I/O; collaborators vary by environment.
@@ -351,7 +317,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `hexagonal`, `repository`, `strategy`
 - Conflicts with: none
 - Overuse smell: a DI container for a script; Singletons used as service locators.
-- Simpler alternative: none
 
 ## Code — structural
 
@@ -362,7 +327,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `hexagonal`, `anti-corruption-layer`
 - Conflicts with: none
 - Overuse smell: adapters that rename methods and nothing else, for code you own.
-- Simpler alternative: none
 
 ### facade — Facade: one simple interface over a complex subsystem
 - Signals: callers repeat the same multi-step sequence against a subsystem.
@@ -371,7 +335,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `service-layer`, `strangler-fig`
 - Conflicts with: none
 - Overuse smell: a facade that exposes every method of what it hides.
-- Simpler alternative: none
 
 ### decorator — Decorator: add behaviour to an object by wrapping it
 - Signals: cross-cutting behaviour (caching, logging, retry) must be combined per instance without subclass explosion.
@@ -380,7 +343,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `chain-of-responsibility`, `retry-with-backoff`
 - Conflicts with: none
 - Overuse smell: wrappers whose order matters but is not documented.
-- Simpler alternative: none
 
 ## Code — behavioral
 
@@ -391,7 +353,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `factory-method`, `dependency-injection`
 - Conflicts with: none
 - Overuse smell: a strategy interface with one implementation.
-- Simpler alternative: none
 
 ### observer — Observer: notify in-process subscribers when state changes
 - Signals: one change must trigger ≥ 2 independent in-process reactions the source should not know about.
@@ -400,7 +361,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `publish-subscribe`
 - Conflicts with: none
 - Overuse smell: chains of observers triggering observers.
-- Simpler alternative: none
 
 ### command — Command: represent a request as an object
 - Signals: operations must be queued, logged, undone or retried as values.
@@ -409,7 +369,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `queue-load-leveling`, `cqrs`
 - Conflicts with: none
 - Overuse smell: commands that are only renamed method calls.
-- Simpler alternative: none
 
 ### state — State: move state-dependent behaviour into one object per state
 - Signals: an entity has ≥ 3 states with transition rules, and switches on its status are spread across methods.
@@ -418,7 +377,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `strategy`
 - Conflicts with: none
 - Overuse smell: state classes that all share the same behaviour.
-- Simpler alternative: none
 
 ### chain-of-responsibility — Chain of responsibility (middleware): pass a request along a chain of handlers
 - Signals: a request needs an ordered, configurable pipeline of independent steps (auth, validation, logging).
@@ -427,7 +385,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `decorator`
 - Conflicts with: none
 - Overuse smell: handlers that depend on each other's side effects.
-- Simpler alternative: none
 
 ## Code — application
 
@@ -438,7 +395,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `unit-of-work`, `service-layer`, `hexagonal`
 - Conflicts with: none
 - Overuse smell: generic `Repository<T>` that re-exposes the ORM.
-- Simpler alternative: none
 
 ### unit-of-work — Unit of work: track changes and commit them in one transaction
 - Signals: one business operation writes several aggregates that must commit or roll back together.
@@ -447,7 +403,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `repository`, `service-layer`
 - Conflicts with: none
 - Overuse smell: hand-rolled unit of work on top of an ORM session that already is one.
-- Simpler alternative: none
 
 ### service-layer — Service layer: application operations as one boundary over the domain
 - Signals: the same use case is invoked from ≥ 2 entry points (HTTP, CLI, jobs) and its orchestration is duplicated.
@@ -456,7 +411,6 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `repository`, `unit-of-work`, `layered`
 - Conflicts with: none
 - Overuse smell: service methods that only call one repository method.
-- Simpler alternative: none
 
 ### active-record-vs-data-mapper — Active record vs data mapper: objects persist themselves, or a mapper persists them
 - Signals: choosing how domain objects reach the DB; active record when the domain mirrors tables, data mapper when it does not or when the design uses `hexagonal`, `cqrs` or `event-sourcing`.
@@ -465,4 +419,3 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Pairs with: `repository`, `unit-of-work`
 - Conflicts with: none
 - Overuse smell: active record objects carrying complex domain rules across tables.
-- Simpler alternative: none

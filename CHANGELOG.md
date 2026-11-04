@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **An architecture pattern catalog.** `references/architecture-patterns.md` lists system-design
-  and code-level patterns, each with Signals, Not when, Cost, Pairs with, Conflicts with, Overuse
-  smell and Simpler alternative. Agents pick from it and never name a pattern outside it; a
+  and code-level patterns, each with Signals, Not when, Cost, Pairs with, Conflicts with and
+  Overuse smell. Agents pick from it and never name a pattern outside it; a
   project adds its own entries in `docs/architecture/catalog-additions.md` after your
   approval.
 - **`/dev-workflow:architect` designs a system before `/dev-workflow:feature`.** It asks for
