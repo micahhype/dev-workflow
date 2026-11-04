@@ -41,7 +41,7 @@ when its Status line reads `accepted`.
    # <Name> — architecture
    ## Context & goal
    ## Non-functional requirements   <!-- each: number or TBD, and its source -->
-   ## Chosen patterns               <!-- each: `id` — matched signal — why its simpler alternative lost -->
+   ## Chosen patterns               <!-- each: `id` — matched signal — why the cheaper entry its Not when names (if any) lost -->
    ## Components                    <!-- each: name — responsibility -->
    ## Data flow
    ## Diagram                       <!-- mermaid; only components named above -->
