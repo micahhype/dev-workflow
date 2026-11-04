@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An architecture pattern catalog.** `references/architecture-patterns.md` lists system-design
   and code-level patterns, each with Signals, Not when, Cost, Pairs with, Conflicts with, Overuse
   smell and Simpler alternative. Agents pick from it and never name a pattern outside it; a
-  project adds its own entries in `docs/architecture/catalog-additions.md`.
+  project adds its own entries in `docs/architecture/catalog-additions.md` after your
+  approval.
 - **`/dev-workflow:architect` designs a system before `/dev-workflow:feature`.** It asks for
   numeric NFRs, picks catalog patterns, and writes `docs/architecture/<name>.md` (components,
   data flow, mermaid diagram, tradeoffs, risks, PR slices) after your approval. `adr <title>`
@@ -19,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`solution-architect` names patterns only from the catalog** and is briefed per the catalog's
-  briefing rule in `/dev-workflow:feature` Stage 2. It and `plan-reviewer` read accepted ADRs and
-  flag a plan that contradicts one without naming it as superseded.
+  briefing rule in `/dev-workflow:feature` Stage 2, and names the accepted ADR its option would
+  supersede. `plan-reviewer` reads accepted ADRs and flags a plan that contradicts one without
+  naming it as superseded. Stage 2 appends each PROPOSED catalog entry you approve to
+  `docs/architecture/catalog-additions.md`.
 
 ## [0.21.0] - 2026-11-03
 

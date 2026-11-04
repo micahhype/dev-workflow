@@ -8,6 +8,8 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Entry format: `### <id> — <Name>: <what it solves>`, then seven bullets in order:
   Signals, Not when, Cost, Pairs with, Conflicts with, Overuse smell, Simpler
   alternative. Ids are stable — designs and ADRs cite them; never rename one.
+  Pairs with, Conflicts with and Simpler alternative are `none` or backticked ids
+  from this catalog or the additions.
 - "Not when" and "Simpler alternative" are BINDING: a pick that hits a Not when
   line is rejected, and its Simpler alternative must be tried first.
 - When no Signals line matches, pick nothing — a design with no pattern is
@@ -19,7 +21,9 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
   and why its Simpler alternative lost.
 - At most 5 picks; zero is valid.
 - Project-local additions live in the project's
-  `docs/architecture/catalog-additions.md`, in this same format.
+  `docs/architecture/catalog-additions.md`, in this same format. An addition's id
+  must not reuse an id from this catalog or the additions; on a collision, ignore
+  the addition and warn the user.
 - If no entry fits, say so and draft a new entry in this format for the user to
   approve. Never use an unapproved pattern.
 - Briefing an architect: give the full index (`grep '^### '` of this catalog and
@@ -27,8 +31,7 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
   entries whose Signals match an NFR or symptom in the criteria or research — and
   of each candidate's Simpler-alternative ids, and this Rules section. The
   architect may cite any index id; the orchestrator checks a cited id it did not
-  expand against the full entry (Signals, Not when) before it reaches the options
-  table.
+  expand against the full entry (Signals, Not when) before it reaches the user.
 
 ## Structure
 

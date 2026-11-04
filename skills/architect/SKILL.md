@@ -12,8 +12,8 @@ The argument picks the mode: `adr <title>` runs **adr mode**; anything else runs
 Every pattern comes from the catalog at
 `${CLAUDE_SKILL_DIR}/../../references/architecture-patterns.md` or the project's
 `docs/architecture/catalog-additions.md`. The catalog's `## Rules` header holds
-the pick rules and the briefing rule — follow them from there; they are not
-repeated here. An ADR is accepted when its Status line reads `accepted`.
+the pick rules and the briefing rule — follow them from there. An ADR is accepted
+when its Status line reads `accepted`.
 
 ## Design mode
 1. Read, in one turn: `conventions.md`, `project-map.md` if present, every
@@ -52,7 +52,9 @@ repeated here. An ADR is accepted when its Status line reads `accepted`.
    ```
 
 6. **CHECKPOINT: show the draft and stop. Write `docs/architecture/<name>.md`
-   only after the user approves it.**
+   only after the user approves it.** `catalog-additions` is a reserved name; if
+   `docs/architecture/<name>.md` already exists, say at the checkpoint that it
+   will be overwritten.
 7. Offer to record the key decisions as ADRs (adr mode below).
 
 ## ADR mode
@@ -82,5 +84,8 @@ repeated here. An ADR is accepted when its Status line reads `accepted`.
   partner's. Reuse what the codebase already has before adding a component.
 - Write nothing but `docs/architecture/<name>.md`,
   `docs/architecture/catalog-additions.md` and `docs/adr/NNNN-<title>.md`, each
-  after its checkpoint. `<name>` and `<title>` are lowercase kebab-case slugs
-  (`[a-z0-9-]`) derived from the goal and the ADR title.
+  after its checkpoint — plus the Status line of the ONE existing
+  `docs/adr/<NNNN>-*.md` matched by the Supersedes number, a regular file inside
+  `docs/adr/`; on zero or several matches, stop and ask. `<name>` and `<title>`
+  are lowercase kebab-case slugs (`[a-z0-9-]`) derived from the goal and the ADR
+  title.
