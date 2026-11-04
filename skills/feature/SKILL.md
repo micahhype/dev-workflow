@@ -322,9 +322,11 @@ Reads, not a subagent.
    panel missed an angle, say so to the user and offer to spawn another architect
    for it; don't quietly fill the gap. Check every catalog id an architect cites
    that you did not expand against its full entry (Signals, Not when) before it
-   reaches the table. A PROPOSED entry an architect returns is shown at the
-   checkpoint below; if the user approves it, append it to the project's
-   `docs/architecture/catalog-additions.md`.
+   reaches the table. Each PROPOSED entry an architect returns gets its own yes/no
+   item at the checkpoint below, showing the full entry text; picking an option
+   never approves its PROPOSED entry. On yes, append the entry without the
+   PROPOSED mark to the project's `docs/architecture/catalog-additions.md`
+   (create `docs/architecture/` if missing).
 3. Give your recommendation first, but don't decide for the user. If the smallest
    option satisfies the request, recommend it and say plainly what the larger ones
    buy — "handles 100× the traffic we have" is a cost, not a feature. The
