@@ -25,9 +25,10 @@ Patterns, microservices.io, Fowler (PoEAA, bliki), GoF, Cockburn.
 - Briefing an architect: give the full index (`grep '^### '` of this catalog and
   of the project's catalog-additions.md), plus the full text of the candidates —
   entries whose Signals match an NFR or symptom in the criteria or research — and
-  of each candidate's Simpler-alternative ids. The architect may cite any index
-  id; the orchestrator checks a cited id it did not expand against the full entry
-  (Signals, Not when) before it reaches the options table.
+  of each candidate's Simpler-alternative ids, and this Rules section. The
+  architect may cite any index id; the orchestrator checks a cited id it did not
+  expand against the full entry (Signals, Not when) before it reaches the options
+  table.
 
 ## Structure
 

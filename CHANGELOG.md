@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **An architecture pattern catalog.** `references/architecture-patterns.md` lists system-design
+  and code-level patterns, each with Signals, Not when, Cost, Pairs with, Conflicts with, Overuse
+  smell and Simpler alternative. Agents pick from it and never name a pattern outside it; a
+  project adds its own entries in `docs/architecture/catalog-additions.md`.
+- **`/dev-workflow:architect` designs a system before `/dev-workflow:feature`.** It asks for
+  numeric NFRs, picks catalog patterns, and writes `docs/architecture/<name>.md` (components,
+  data flow, mermaid diagram, tradeoffs, risks, PR slices) after your approval. `adr <title>`
+  writes the next `docs/adr/NNNN-<title>.md`.
+
+### Changed
+- **`solution-architect` names patterns only from the catalog** and is briefed per the catalog's
+  briefing rule in `/dev-workflow:feature` Stage 2. It and `plan-reviewer` read accepted ADRs and
+  flag a plan that contradicts one without naming it as superseded.
+
 ## [0.21.0] - 2026-11-03
 
 ### Added

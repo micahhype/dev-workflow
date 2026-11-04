@@ -47,6 +47,7 @@ Working docs scaffold automatically under `.dev-workflow/features/<slug>/`; mult
 | Command | Purpose |
 |---------|---------|
 | `/dev-workflow:init` | Inspect the project, draft `conventions.md` + `project-map.md`, import conventions from `CLAUDE.md` |
+| `/dev-workflow:architect` | System design before `/dev-workflow:feature`: numeric NFRs, patterns picked from the plugin's [pattern catalog](references/architecture-patterns.md), diagram, PR slices → `docs/architecture/<name>.md`. `adr <title>` records a decision in `docs/adr/` |
 | `/dev-workflow:feature` | Drive the whole feature workflow (orchestrator). `--bug` swaps the front end for reproduce → root cause → regression |
 | `/dev-workflow:status` | Readout of the active feature / phase / gate |
 | `/dev-workflow:config` | Effective settings, where each came from, and which config lines are silently doing nothing |
