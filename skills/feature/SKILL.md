@@ -39,7 +39,7 @@ the safety hooks cannot see, and they fail SILENTLY when they can't see it.
 | `[x] coded` | the `coder` (you, in a trivial phase) | when it finishes implementing | — |
 | `- Evidence: <cited proof>` | the `coder` (you, in a trivial phase) pre-fills what it RAN (test/command output); you AUGMENT with what the reviewers verified | coder on return, you after reviews, before yielding | the Stop evidence gate — an empty or placeholder ledger is refused |
 | `[x] code-reviewed` (Final review uses `full code review`) | you | after `code-reviewer` returns AND its findings are resolved | **the Stop evidence gate** — ticking either string ARMS it: from here on, ending your turn with an empty `- Evidence:` line is blocked |
-| `[x] security-scanned` | you | after `code-reviewer` returns a `Security pass:` line; leave unticked when the phase's surface didn't warrant the pass | — |
+| `[x] security-scanned` | you | after `code-reviewer` returns its `Security pass:` line and the security findings are resolved — every phase | — |
 | `[x] USER APPROVED` | **you, but ONLY after the user actually said so** | at the approval checkpoint | `status.py`, and the evidence gate's "which phase is current" logic |
 
 The `coder` owns `[x] coded` and the first draft of `- Evidence:` because it is the
@@ -109,8 +109,8 @@ map, existing features, shared building blocks, extension points) if they exist.
   existing features that overlap, building blocks to reuse, the extension point
   to hook into) and carry THOSE forward. You hand agents excerpts, never "go read
   project-map.md" — the point of the file is that they don't each pay for it.
-- **Read what the user changed after the last feature shipped** — see "Post-ship
-  edits" under Stage 6. Do it before Stage 0.5, so an approved rule already binds
+- **Read what the user changed after the last feature shipped** — "Post-ship
+  edits" in `${CLAUDE_SKILL_DIR}/references/lessons.md`. Do it before Stage 0.5, so an approved rule already binds
   this feature.
 
 ## Stage 0.5 — Clarify the request (this part is yours; you are the analyst)
@@ -167,63 +167,12 @@ never hand the guess to a subagent to make for you.
 
 ### Bug mode — the request is a bug, not a feature
 Enter this branch on `--bug`, or when the request describes something that already
-exists and is behaving wrong ("the orders endpoint 500s on an empty cart", "the total
-is off after a refund"). If it is genuinely unclear which it is, ask in one line — the
-two front ends diverge immediately, and correcting the mode later costs a stage.
-
-**The unknown is different, so the stage is different.** A feature request's risk is
-building the wrong thing; steps 1–5 above exist to pin down WHAT. A bug report's risk
-is fixing the wrong PLACE: the symptom is visible and the cause is not, and a patch
-aimed at the symptom passes every review in this workflow — reviewers check the code
-against the plan, and the plan would say "stop the 500". Nothing downstream can catch
-it. So this branch buys the cause before anything is planned, and it is yours: a
-subagent that cannot reproduce and cannot ask will hand you a plausible cause.
-
-1. **Reproduce it first, and paste the proof.** The smallest command, test or request
-   that makes the bug happen, plus its actual output. Reproduce BEFORE you diagnose —
-   a cause you reasoned out from reading code is a hypothesis, and this workflow will
-   spend an implementation, a review and a user approval on it.
-   **If you cannot reproduce it, STOP and go to the user** with what you tried and
-   what you need (the failing input, the env, the log line, the version). Do not
-   proceed on a report alone: an unreproducible bug has no way to prove it was fixed,
-   which means Stage 4 has no Evidence to cite and the gate is measuring nothing.
-   The repro output you capture here is the "before" half of that evidence — keep it
-   verbatim.
-2. **Localize, then name the root cause with evidence.** Give the `file:line` and say
-   in one or two sentences why THAT code produces THIS symptom. Distinguish the two
-   out loud: a null check that would suppress the crash is the symptom; the write
-   that left the field null is the cause. Fixing the symptom is sometimes the right
-   call — under time pressure, or when the cause sits in someone else's code — but it
-   is then a decision the user makes at step 4, recorded as one, not a diagnosis you
-   quietly stopped short of.
-3. **State the blast radius.** What else reaches that code path, what else the same
-   cause is plausibly breaking that nobody reported yet, and — the one that gets
-   missed — **whether bad data was already written.** Fixing the code does not repair
-   rows the bug already corrupted; if any exist, say so here, because that is a
-   separate piece of work with its own risk and its own approval, never a silent
-   extra in the fix.
-4. **CHECKPOINT — only when something actually forks.** Stop and use
-   `AskUserQuestion` if the root cause is uncertain, if the honest fix reaches beyond
-   the reported symptom, if cause and symptom fixes are both defensible, or if there
-   is data to repair. Otherwise state the repro, the cause and where the fix belongs,
-   and keep going — the fix itself gets proposed where it normally is (inline for
-   trivial, the architect panel above trivial), not here.
-   **If the diagnosis shows there is no bug** — the behaviour is intended, or the
-   caller is wrong — say that and stop. Do not build the change that would make the
-   report true; that is a feature request, and it goes back through steps 1–5.
-5. **Turn it into acceptance criteria** in `spec.md` 1b, same as any feature. The
-   first one is always the regression, and it names the repro verbatim: "`pytest
-   tests/test_cart.py::test_empty` fails on the current commit and passes after the
-   fix". Add one criterion per behaviour that must NOT change — the callers from
-   step 3 — because a fix that breaks a neighbour is the second most common way this
-   goes wrong.
-6. **Write section 1a of `spec.md`** — repro, root cause with `file:line`, blast
-   radius, and (if any) the data-repair question and its answer. This is what makes
-   the cause reviewable at the plan checkpoint instead of living only in this
-   conversation; the coder and the reviewers get it quoted inline like everything
-   else.
-
-Then continue at Stage 0.8 — a bug fix is TRIVIAL by default, and usually stays there.
+exists and is behaving wrong. If it is genuinely unclear which it is, ask in one line.
+**Read `${CLAUDE_SKILL_DIR}/references/bug-mode.md` now and follow it instead of steps
+1–5**: reproduce first (cannot reproduce → stop and ask the user), root cause at
+`file:line`, blast radius, then acceptance criteria whose first item is the
+regression. The same file sets a bug's tier and what its Evidence ledger owes. Then
+continue at Stage 0.8.
 
 ## Stage 0.8 — Size it: the machinery must be proportional to the change
 **The user pays for this workflow in wall-clock time and approval round-trips.** A
@@ -244,19 +193,12 @@ feel like real features and most of them are twenty lines.
 
 | Tier | It is this tier only if you can name one of these | What actually runs |
 |---|---|---|
-| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase**, coded by you (no `coder`) → `code-reviewer` (with its security pass if the surface warrants) → your approval. **No researcher, no panel, no plan-reviewer, no Stage 5.** |
+| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase**, coded by you (no `coder`) → `code-reviewer` (logic + security pass) → your approval. **No researcher, no panel, no plan-reviewer, no Stage 5.** |
 | **standard** | a new interface others will call (endpoint, command, screen, public function), OR new persistent state/schema, OR several files across one subsystem | survey, plus external research **only if there is a real external question** → simplicity-first architect (+ one signalled angle) → plan + `plan-reviewer` → phases → Stage 5 only if the plan ended up with more than one phase |
 | **complex** | crosses a subsystem or trust boundary, OR changes a data model other code depends on, OR the design itself is security-sensitive, OR wide blast radius | full machinery — simplicity-first + the signalled angles, full final audit |
 
-**For a bug, the ROOT CAUSE sets the tier — not the severity of the symptom.** A
-production outage caused by a one-line off-by-one is still one reviewable diff and
-still trivial; urgency is a reason to move fast, not a reason to run more machinery.
-Move up only when the cause says so: it sits in shared code many callers depend on,
-or the fix changes a contract others rely on (**standard**); the bug IS a
-vulnerability, or the cause crosses a trust boundary or a data model (**complex**).
-Data already corrupted by the bug is not a tier signal — it is its own phase, with
-its own `- Why separate:`, its own rollback point and its own approval, and it is
-never folded into the code fix.
+**For a bug, the root cause sets the tier, not the severity of the symptom** — see
+`bug-mode.md`.
 
 **Re-check the tier after the plan is drafted, and DOWNGRADE without ceremony.** This
 estimate is a guess; the plan is when you actually know. If the work turned out to be
@@ -265,9 +207,7 @@ tell the user you scaled it down and why. Downgrading needs no permission. Upgra
 does: name the signal and tell the user before you spend their time on it.
 
 The tier scales research and option-panel depth — NOT security coverage:
-`code-reviewer` runs every phase in every tier, and runs its security pass
-whenever a phase touches a security-sensitive surface (see Stage 4), trivial or
-complex alike. Nor does it scale the approval checkpoints: a cheaper tier means less
+`code-reviewer` runs every phase in every tier, security pass included. Nor does it scale the approval checkpoints: a cheaper tier means less
 machinery between the checkpoints, never fewer of them.
 
 ## Stage 1 — Research  (skip for trivial)
@@ -286,9 +226,11 @@ researcher to skip the web work and return the survey only, and say so to the us
    stale.
 2. Write both into `spec.md` — research in section 2, the existing-implementation
    survey in section 2b. Correct any stale `project-map.md` entry it found.
-3. Summarize for the user, leading with what already exists (that is the part that
-   changes what we build). **CHECKPOINT: stop; confirm the research direction
-   before proposing solutions.**
+3. Summarize for the user in a few lines, leading with what already exists (that
+   is the part that changes what we build), and go straight on to Stage 2 — the
+   user steers at the options checkpoint. Stop here only if the research
+   contradicts the request or an acceptance criterion: that is a Stage 0.5
+   question, and it goes to the user before any option is drawn up.
 
 **Trivial tier skips this stage — but not the survey.** Before proposing inline,
 read the `project-map.md` entries for the area and the files they name, so a
@@ -336,9 +278,7 @@ Reads, not a subagent.
    the choice + rationale in `spec.md` sections 4–5.
 
 ## Stage 3 — Plan
-1. Enter Plan Mode (ask the user to press Shift+Tab twice, or hold a read-only
-   planning stance — Plan Mode is behavioral, not a hard write-lock).
-2. Map the files to change; split the work into phases. Write `plan.md`, following
+1. Write nothing but the working docs until the plan is approved. Map the files to change; split the work into phases. Write `plan.md`, following
    these rules:
    - **Start from ONE phase and justify every additional one — in writing, on a
      `- Why separate:` line the plan guard enforces.** A phase costs a full loop —
@@ -354,14 +294,9 @@ Reads, not a subagent.
      one phase for a standard feature, that is the plan.) The failure in the other
      direction is just as real: a diff too big to review in one sitting hides bugs,
      and it is what takes control of the change away from the user.
-   - **Cut the plan into PRs when it is over the cap.** When the phases' `- Size:`
-     total is over the PR cap, add a `## PRs` section: stacked PRs, each one
-     independently mergeable, ordered prep/refactor → core + tests → wiring/UI.
-     Pieces that are not finished yet stay dormant or behind a flag until the PR
-     that wires them. A PR holds whole phases, and a phase never spans two PRs.
-     Lockfiles and generated files do not count toward `- Size:`, but the per-phase
-     diff budget still measures them, so name them on `- Over budget:`. A plan that
-     must land as one PR anyway says why on an `- Over cap:` line instead.
+   - **Over the PR cap → cut the plan into PRs.** When the phases' `- Size:` total
+     is over the PR cap, read `${CLAUDE_SKILL_DIR}/references/pr-slicing.md` and add
+     the `## PRs` section it describes, or an `- Over cap:` reason for landing as one.
    - **Order by dependency, then risk.** No phase depends on something a later
      phase builds; among independent phases, schedule the risky or uncertain ones
      EARLY so the plan fails fast, not late.
@@ -379,8 +314,10 @@ Reads, not a subagent.
    - **Each phase has a `- Size:` — its diff budget.** Changed lines (added +
      deleted, tests included). The plan guard measures the phase's real diff at
      every Stop and refuses past 2× the estimate (min +40 lines) until the phase-log
-     `- Over budget:` says why. An honest number matters more than a small one: it
-     is the user's review load, stated before they agree to it.
+     `- Over budget:` says why. Lockfiles and generated files do not count toward
+     `- Size:`, but the diff budget still measures them, so name them on
+     `- Over budget:`. An honest number matters more than a small one: it is the
+     user's review load, stated before they agree to it.
    - **Decide the shape before the phases — fill `## Structure`.** Where each
      new file goes, the one responsibility each file has, the main flow from entry
      point to output, and — the part that matters most — the EXISTING feature it is
@@ -390,13 +327,9 @@ Reads, not a subagent.
      a few features the codebase follows no pattern at all. If nothing in the
      project fits, name the pattern you chose and why; a departure from the
      exemplar goes on the `- Deviations:` line, where the user sees it.
-   - **Prototype only when what the user will SEE is the uncertain part.** For a
-     new screen or page whose layout nobody has pinned down, build a throwaway
-     static mock (one HTML file, fake data, in the feature dir — never in the
-     source tree) and show it before the plan checkpoint. It is a question to the
-     user, not a first draft: it is deleted once the plan is approved, and no
-     phase builds on it. Anything else — an endpoint, a job, a refactor — gets no
-     prototype; `## Structure` on paper is enough.
+   - **A new screen whose layout nobody has pinned down** gets a throwaway mock
+     before the plan checkpoint — read `${CLAUDE_SKILL_DIR}/references/ui-prototype.md`.
+     Nothing else gets a prototype; `## Structure` on paper is enough.
    - **Reuse before rebuild.** Name, per phase, the existing building block or
      extension point from `project-map.md` it hooks into. If the plan adds
      something the project already has in another form, either use the existing
@@ -408,12 +341,12 @@ Reads, not a subagent.
      cannot work without them. Things that are merely a good idea go to the user as
      a suggestion, or into `spec.md` section 5 as a non-goal. They do not get
      planned in silently.
-3. **Re-check the tier now.** The plan is the first point where the size is real
+2. **Re-check the tier now.** The plan is the first point where the size is real
    rather than guessed. If it came out smaller than the Stage 0.8 estimate,
    collapse the phases and drop the machinery the lighter tier doesn't run — then
    tell the user you scaled it down. This is the cheapest correction available in
    the whole workflow, and it is the one most often skipped.
-4. **Adversarial plan review** (standard + complex tiers; SKIP for trivial): spawn
+3. **Adversarial plan review** (standard + complex tiers; SKIP for trivial): spawn
    the `plan-reviewer` subagent on the drafted `plan.md`, handing it the
    existing-implementation survey, the map excerpts, and your diff estimate. It
    hunts in BOTH directions — missing phases, hidden dependencies, untestable
@@ -423,10 +356,10 @@ Reads, not a subagent.
    DELETE phases) before showing the user — note what changed. Bounded like every
    other review loop: at most 2 rounds with the reviewer, then decide or take the
    disagreement to the user (see the review-round rules in Stage 4).
-5. **CHECKPOINT: present the plan, stop, get approval or edits before any code.**
+4. **CHECKPOINT: present the plan, stop, get approval or edits before any code.**
    Lead with the shape — tier, PR count, phase count, estimated files/lines — so the
    user can say "that's too much machinery for this" BEFORE paying for it. If you
-   cut the plan down in step 3, say what you cut.
+   cut the plan down in step 2, say what you cut.
 
 ## Stage 4 — Phased implementation (loop per phase)
 **Trivial tier: you write the code yourself — no `coder` spawn.** Use the tier as
@@ -478,27 +411,20 @@ For each phase in `plan.md`, in order:
    Before the review, check the diff for files the phase should not leave behind:
    probe/smoke/e2e scripts, backups, `.diff` dumps, handoff notes — in `src/`,
    `scripts/` or the feature dir. Delete them unless the plan asked for them.
-   The `code-reviewer` (logic/quality) runs ALWAYS, every phase, every tier. Ask for
-   its **Security pass** ONLY when this phase touches a security-sensitive surface:
-   auth/authz, input handling/parsing, crypto or secrets, data access (queries,
-   serialization/deserialization), or external I/O (network, filesystem,
-   subprocess). Gated by the phase's SURFACE, not the tier — a copy tweak or rename
-   in a complex feature needs no security pass; a new endpoint in a trivial one
-   does. When unsure, ask for it.
-   Rationale: the per-phase security pass catches LOCAL, compounding bugs early
-   (injection, hardcoded secrets, missing authz on a new endpoint) when they are
-   cheap to fix. EMERGENT, cross-phase vulnerabilities are the Stage 5
-   `security-audit`'s job, so skipping the pass on non-sensitive phases loses
-   nothing there.
+   The `code-reviewer` runs ALWAYS, every phase, every tier, and its **Security
+   pass** runs with it — there is no surface to judge first. On a phase that touches
+   nothing sensitive the pass is one line naming what was checked. It catches LOCAL
+   bugs while they are cheap to fix (injection, hardcoded secrets, missing authz on a
+   new endpoint); EMERGENT, cross-phase vulnerabilities are Stage 5's `security-audit`.
 3. Summarize the review that ran for the user. Update `phase-log.md` — using the
    LITERAL checkbox strings from the table above, which the hooks parse. The coder
    (or you, in trivial) already ticked `[x] coded` and pre-filled `- Evidence:` with
    what it ran; your job here is the review boxes and evidence:
-   - If the reviewer found issues, have `coder` fix them (fix them yourself in
-     trivial), then re-review — **under the round budget below. Count the rounds; do
+   - If the reviewer found BLOCKING issues, have `coder` fix them (fix them yourself
+     in trivial), then re-review — **under the round budget below. Count the rounds; do
      not loop until they agree.**
-   - Tick `[x] code-reviewed` once `code-reviewer`'s findings are resolved (plus
-     `[x] security-scanned` when its report carries the `Security pass:` line).
+   - Tick `[x] code-reviewed` and `[x] security-scanned` once `code-reviewer`'s
+     findings, its `Security pass:` ones included, are resolved.
      "Resolved" means fixed, rebutted with evidence you accepted (never your own
      rebuttal in a phase you coded), or decided by the user at escalation — never
      "we ran out of rounds".
@@ -529,83 +455,62 @@ For each phase in `plan.md`, in order:
    summary and evidence. ONLY after the user
    has actually approved, tick `[x] USER APPROVED` in `phase-log.md` and move on.
    Never tick it yourself to advance; never advance unapproved.
-5. **With a `## PRs` section, commit per PR.** When the LAST phase of PR N is
-   approved, create or switch to branch `<slug>/pr-<N>` (PR 1 branches from the
-   current branch, PR N from `<slug>/pr-<N-1>`), commit that PR's changes, and write
-   `.dev-workflow/features/<slug>/pr-<N>.md`: What / Why / How to review (the
-   reading order, from the MUST entries of its phases' review maps) / Stacked on.
-   Never push and never run `gh pr create`; tell the user the branch and the file.
-   Once a PR is committed, that branch and commit are its rollback unit.
-   Without `## PRs`: if it's a git repo and the user wants per-phase commits, commit
-   scoped to this phase (`Phase N: <title>`). Skip otherwise.
+5. **Commit.** With a `## PRs` section, follow `pr-slicing.md`: commit per PR on
+   `<slug>/pr-<N>` once its last phase is approved; never push. Without `## PRs`: if
+   it's a git repo and the user wants per-phase commits, commit scoped to this phase
+   (`Phase N: <title>`). Skip otherwise.
 
 ### One artifact per criterion is NOT one test per criterion
-**Test budget.** Default is NO new test file per phase: extend the changed module's
-existing spec. A test is written only for pure logic with real branching, a bug's
-regression, or store-level behaviour proven against the real store. Never one per
-defensive branch, never a wiring/DI test, never a test of vendored or generated
-code. If a phase's diff has more test lines than code lines, that is a signal to
-cut, not a sign of rigour.
+The gate will not let the turn end without a citable artifact, and the cheapest one
+to manufacture is a new test — so, left alone, criteria turn into tests one-for-one,
+shaped to be CITED rather than to be able to fail. A ledger reading `criterion 1 →
+x.spec.ts:123, criterion 2 → :135` is that failure, not rigour.
 
-The evidence rule above is the strongest incentive in this workflow: the gate will
-not let the turn end without a citable artifact, and the cheapest artifact to
-manufacture is a new test. Left alone, that turns "2–5 acceptance criteria" into
-"2–5 new test files", whether or not the criteria have any logic worth testing —
-and the tests it produces are shaped to be CITED, not to be able to fail. A ledger
-reading `criterion 1 → x.spec.ts:123, criterion 2 → :135, criterion 3 → :160` is
-that failure, not a sign of rigour.
+- **An artifact is anything that would have caught the criterion being wrong**: a
+  type-check or build that could not have passed otherwise, a command run against
+  the real thing with its output, a `file:line` where the constraint now holds by
+  construction, a log line from a real run, one test covering several criteria.
+  Cite the cheapest one that would actually fail.
+- **Test budget.** Default is NO new test file per phase: extend the changed
+  module's existing spec. A test is written only for pure logic with real branching,
+  a bug's regression, or store-level behaviour proven against the real store. More
+  test lines than code lines in a phase is a signal to cut.
+- **A criterion satisfied by a declaration** (a validator annotation, a schema field,
+  a config value, a type) gets NO test — one would only restate it. Cite the
+  declaration and the type-check, and say in the ledger which criterion you skipped
+  and why, so the user sees a decision rather than a gap.
+- **A test that mocks the thing it claims to prove is worse than no test.**
+  Atomicity, uniqueness, index and transaction behaviour live in the store: prove
+  them against a real one, or narrow the claim to what a fake CAN prove. Faking a
+  collaborator to INJECT a failure you cannot otherwise reach stays legitimate.
+- **A bug fix** cites its repro failing before the fix and passing after
+  (`bug-mode.md`); the declaration exemption does not apply to it.
 
-**An artifact is anything that would have caught the criterion being wrong.** A
-type-check or build that could not have passed otherwise, the command you ran
-against the real thing and its output, a `file:line` where the constraint is now
-enforced by construction, a log line from an actual run, one test that covers
-several criteria at once. Cite the cheapest artifact that would actually fail.
-
-**Some criteria must NOT get a test, and saying so is part of the job.** A
-criterion satisfied by a declaration — a validator annotation, a schema field, a
-config value, a type — is already checked by the linter, the type-checker or the
-framework, and a test that asserts `@Max(100)` rejects 101 only restates the
-annotation: it cannot fail unless someone edits the annotation, in which case it
-changes with it. Cite the declaration and the type-check; do not write the test.
-When you skip one, say which criterion and why in the ledger, so the user sees a
-decision rather than a gap.
-
-**A bug fix owes one artifact nothing else substitutes for: the before AND the
-after.** The regression test or command must be shown FAILING on the unfixed code and
-passing after — a test written after the fix and never seen red proves the code runs,
-not that it fixes anything, and it is the single easiest thing to fool yourself with
-here. You already captured the red half in Stage 0.5 step 1; the ledger cites that
-output and the post-fix run, so this costs one extra paste, not one extra test run.
-This is also the one place the "a declaration already enforces it" exemption above
-does NOT apply: if the fix turns out to be a validator or a config value, the artifact
-is still the repro, run twice.
-
-**A test that mocks the thing it claims to prove is worse than no test**, because
-it reports the risk as covered. Atomicity, uniqueness, index and transaction
-behaviour live in the store: a fake counter that increments in one thread passes
-"never yields a duplicate" forever, including after the real atomic operator is
-deleted. If the criterion rests on the store, prove it against a real one — most
-projects already ship a harness for this (check `package.json` before assuming
-otherwise) — or narrow the claim to what a fake CAN prove: that the code sends the
-right query. Faking a collaborator to INJECT a failure you cannot otherwise reach
-is the legitimate case, and stays legitimate.
-
-Two of these shapes are hook-enforced on write (`test_guard.py`: a provider built
-from positional `as any` blanks, a test block that asserts nothing). The rest is
-`code-reviewer`'s, and it is authorized to say a test should be DELETED.
+The full rules are the "Tests" section of `agents/coder.md` — which you follow in a
+trivial phase — and `code-reviewer`'s test checks. `test_guard.py` denies two shapes
+on write (a provider built from positional `as any` blanks, a test block that
+asserts nothing); the rest is the reviewer's, and it may say a test should be DELETED.
 
 ### The review loop is BOUNDED — at most 2 fix rounds, then the user decides
 A coder and a reviewer left alone will argue indefinitely: the reviewer keeps
 finding things because finding things is its job, and each new round re-opens code
 the last round already settled. Nothing in the loop ends it, so you end it.
 
+**A round is spent only on a BLOCKING finding.** Round 0 with no BLOCKING finding
+is zero rounds: tick the review boxes, put the nits on `- Deferred nits:` and show
+them at the checkpoint. The user picks which to apply; a nit fix of a line or two (a
+rename, a wording change) needs no re-review, and `- Review rounds:` stays `0/2`.
+When a round does run for a BLOCKING finding, the nits may ride along in the same
+fix. There are two labels, BLOCKING and NIT — a reviewer's "should-fix" is BLOCKING
+if it changes behaviour a real caller can reach, otherwise a NIT.
+
 **Budget: 2 fix rounds per phase.** The first review is round 0. Findings → coder
 fixes → re-review is round 1. One more if needed is round 2. There is no round 3.
 
 - **Re-reviews are DELTA-SCOPED.** Hand the fresh reviewer the previous round's
   findings AND the fix diff, and tell it to judge THOSE — did each finding get
-  fixed, did the fix break anything — not to re-review the phase — and ask for the
-  security pass again if round 0 had one. A new finding is
+  fixed, did the fix break anything — not to re-review the phase; the
+  security pass re-runs on the fix diff. A new finding is
   admissible only if it is BLOCKING (correctness, security, data loss). New
   non-blocking nits go on the `- Deferred nits:` line and never justify a round;
   unscoped re-reviews are what turn a 2-round loop into a 6-round one.
@@ -645,97 +550,34 @@ after the Stage 3 re-check, and it skips this stage too.
 The template always scaffolds that section, but nothing ever ticks it when the stage
 is skipped — and `status.py` reports the first unapproved section as the current one,
 so the finished feature is reported as stuck on "Final review" forever. Removing the
-section is what marks the feature done. Skipping the stage does NOT skip step 4
+section is what marks the feature done. Skipping the stage does NOT skip the map update
 below: if the change added a capability or moved something, `project-map.md` still
 gets its line at the phase's approval checkpoint — and since you are deleting the
 Final review section that normally carries `- Project map updated:` and
 `- Lessons:`, write both lines on the LAST PHASE instead, and run Stage 6 at that
 phase's approval checkpoint. The plan guard requires them there.
 
-1. Run over all phases together. Brief both reviewers with the feature's
-   footprint so they don't re-discover it: every changed file grouped by phase,
-   with the line ranges of its hunks, and which phases skipped the code-reviewer's security pass.
-   - `code-reviewer` on CROSS-PHASE issues ONLY — inconsistencies, phase
-     interactions, integration seams. Do NOT re-review files from scratch (done
-     per phase).
-   - `security-audit` (deep pass) — owns EMERGENT, cross-phase interaction
-     vulnerabilities (auth flows spanning phases, data-flow and trust-boundary
-     analysis). It must ALSO give a full pass to any security-sensitive surface
-     whose per-phase security pass was gated out in Stage 4, so nothing
-     ships unscanned. Do NOT re-review clean, non-sensitive phases from scratch.
-2. Summarize findings; update `phase-log.md` final section and its `- Evidence:`
-   line with feature-level proof (test-suite result, validation output, key
-   end-to-end invariants checked), plus `- Review rounds:` and `- Unresolved:`.
-3. If issues found, fix via `coder` and re-audit — **same 2-round budget, same
-   escalation.** An unresolved security finding is never waved through on a round
-   count: it goes to the user with your recommendation, explicitly.
-4. **Update `project-map.md`** so the next feature starts from what this one
-   built — this is how project knowledge accumulates instead of being re-derived:
-   - Append a row to `Existing features`: what it does, key files, today's date.
-   - Add/adjust `Module map` rows for anything new or newly re-scoped, and add any
-     new `Shared building block` or `Extension point` this feature introduced.
-   - Fix entries this feature proved stale, and drop entries for what it removed.
-   - Keep entries to a couple of lines. If nothing structural changed, say so and
-     write nothing — a map that grows a paragraph per feature stops being read.
-5. **CHECKPOINT: present the final result, the `project-map.md` update AND the
-   Stage 6 lesson proposals, then stop for sign-off.** The map is what future
-   agents will treat as fact, so the user gets to correct it here.
+**More than one phase:** read `${CLAUDE_SKILL_DIR}/references/final-review.md` and run
+it — cross-phase `code-reviewer` plus `security-audit`, the same 2-round budget, then a
+sign-off checkpoint that presents the result, the map update and the Stage 6 proposals.
+
+**Every feature, at its final checkpoint, update `project-map.md`** so the next feature starts from what this one
+built — this is how project knowledge accumulates instead of being re-derived:
+- Append a row to `Existing features`: what it does, key files, today's date.
+- Add/adjust `Module map` rows for anything new or newly re-scoped, and add any
+  new `Shared building block` or `Extension point` this feature introduced.
+- Fix entries this feature proved stale, and drop entries for what it removed.
+- Keep entries to a couple of lines. If nothing structural changed, say so and
+  write nothing — a map that grows a paragraph per feature stops being read.
 
 ## Stage 6 — Lessons  (every feature, every tier, at its final checkpoint)
-The workflow does not get better on its own: a review finding, a correction the user
-made, a suggestion they turned down all die with the feature's `phase-log.md`, and
-the next feature makes the same mistake. This stage turns what recurred into a rule
-in `conventions.md` — which every agent already reads on every phase — and only with
-the user's approval. It runs at the final checkpoint: Stage 5's, or the last phase's
-when Stage 5 is skipped. It is one question to the user, not a retrospective.
-
-1. **Gather signal from this feature** — the phase-log you already have:
-   - what the user asked to change at any checkpoint (`- User notes:`), and what
-     they overrode at an escalation (`- Unresolved:`);
-   - `Suggested, not built:` items the user declined — "don't propose X" is a rule;
-   - review findings of the same KIND that came up in two or more phases, or that
-     the coder kept needing a round to fix;
-   - plus any rules from "Post-ship edits" below that are still pending.
-2. **Keep only what generalises.** A rule is worth a line only if it would change
-   what an agent does on a DIFFERENT feature of this project. Drop one-off facts
-   and anything the linter could enforce (propose the lint rule instead). If
-   `conventions.md` already has the rule and it was broken anyway, don't add a
-   duplicate — tell the user the rule is being ignored. One line each, imperative, concrete, ending with where it
-   came from: `- Scale token amounts with bigint, never Number() — user rewrote
-   formatUnits (space-balance)`.
-3. **Propose at most three**, via one `AskUserQuestion` with `multiSelect`, each
-   option a rule with its evidence. Nothing worth proposing is the common, correct
-   outcome — then say so in one line and ask nothing.
-4. **Write the approved ones** to the `## Learned rules` section of `conventions.md`
-   (create the section above "Domain-specific correctness rules" if it is missing).
-   If it passes ~15 lines, propose merging or dropping the weakest in the same
-   question rather than growing it. Record the outcome on the last section's
-   `- Lessons:` line — the rules added, or "none". The plan guard requires the line.
-5. **Record the ship point** (git repos only), after the user signs off:
-   `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py" ship <slug>`. It stores
-   the tree as it was handed over, which is what "Post-ship edits" diffs against.
-   If the approval gate is LOCKED, Bash is denied — ask the user to run it with a
-   `!` prefix, or skip it and say so; never work around the gate.
-
-### Post-ship edits — what the user changed after accepting the code
-The strongest signal this workflow ever gets arrives AFTER the feature: the user
-opens the code the agents wrote and rewrites part of it. Nobody tells the agents.
-At Stage 0 of the next feature, for the most recently shipped feature(s) — at most
-two, newest first from `git for-each-ref --sort=-creatordate
---format='%(refname:short)' refs/dev-workflow/shipped` — whose last phase-log
-section has no `- Post-ship reviewed:` line:
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py" since-ship <slug>
-   <files>`, passing the files from that feature's `- Changed:` lines. "never
-   shipped" means no ship point was recorded — mark it reviewed and move on.
-2. Read the diff for what the USER changed in agent-written code: rewritten logic,
-   deleted comments or tests, renamed variables, removed handling. Ignore changes
-   another feature's `- Changed:` explains, and formatting. Unsure whether an edit
-   was the user's? Ask in the same question rather than guess.
-3. Turn what generalises into rule proposals exactly as in steps 2–4 above, in one
-   `AskUserQuestion` — or none, which is common. Keep it quick; the user came here
-   to start a new feature.
-4. Write `- Post-ship reviewed: <date> — <rules added | no user edits | none
-   generalised>` on that feature's last section, so it is never asked about twice.
+At the final checkpoint — Stage 5's, or the last phase's when Stage 5 is skipped —
+read `${CLAUDE_SKILL_DIR}/references/lessons.md` and run it: at most three rule
+proposals for `conventions.md` in ONE `AskUserQuestion` (nothing worth proposing is
+the common outcome — then say so and ask nothing), the result on the last section's
+`- Lessons:` line (the plan guard requires it; `"none"` is a complete answer), then
+the ship point. The same file holds **Post-ship edits**, which Stage 0 runs. Its
+commands use `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py"`.
 
 ## Notes
 - Subagents can't pause to ask mid-task; scope each delegated task tightly and

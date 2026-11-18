@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews a code diff for correctness, logic bugs, and maintainability before phase completion, plus a security pass when the brief asks for one. Read-only.
+description: Reviews a code diff for correctness, logic bugs, and maintainability before phase completion, plus a security pass. Read-only.
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -99,8 +99,7 @@ Focus on:
   code, deserves that one line. Tool directives (`eslint-disable`, `noqa`,
   `@ts-expect-error`) are not comments.
 
-**Security pass — only when the brief asks for it** (the phase touches a
-security-sensitive surface). Read the "Security focus" section of `conventions.md`,
+**Security pass — every review.** Read the "Security focus" section of `conventions.md`,
 then flag (ignore style, naming, formatting):
 - Generic checklist: injection (SQL/command/template), auth/authorization
   bypass, IDOR, leaked or logged secrets, insecure crypto, unsafe
@@ -127,7 +126,9 @@ rebuttal or drop it — do not simply restate the finding.
 Return (your final message IS the returned data):
 - Findings by severity, each with file:line and a suggested fix. Label each
   **BLOCKING** (correctness, security, data loss — must not ship) or **NIT**
-  (style, naming, preference — worth saying, never worth a round). The orchestrator
+  (style, naming, preference — worth saying, never worth a round). There is no third
+  label: a "should-fix" is BLOCKING if it changes behaviour a real caller can reach,
+  otherwise a NIT. The orchestrator
   bounds the fix loop on those labels, so an unlabelled or inflated finding costs a
   round that a real bug needed.
 - **Review map** — the user approves this phase after you, and the map decides
@@ -149,11 +150,12 @@ Return (your final message IS the returned data):
   with `N must-read / N skim / N skip of N changed lines`, counted from the diff. If
   MUST passes ~150 lines, say the phase is too big to review in one sitting.
   On a RE-REVIEW, map only the fix diff; the orchestrator merges it in.
-- `Security pass:` — only when the brief asked for it: the security findings, or
-  "No obvious vulnerabilities found" citing the concrete surfaces you checked (which
-  files/entry points, which categories from the checklist) — a clean verdict must
-  show what was scanned, not just assert safety. When not asked, still report a security
-  bug you notice anyway, with a severity and label as in the Security pass.
+- `Security pass:` — always: the security findings, or "No obvious vulnerabilities
+  found" citing the concrete surfaces you checked (which files/entry points, which
+  categories from the checklist) — a clean verdict must show what was scanned, not
+  just assert safety. When the diff touches no security-sensitive surface (auth/authz,
+  input parsing, crypto/secrets, queries or deserialization, network / filesystem /
+  subprocess), say so in one line naming the files you checked; do not pad it.
 - EVIDENCE, not assertion: pass or fail, cite what you checked — specific
   files/functions read and concrete cases verified (e.g. "read parse() at
   x.py:20-60; empty-input and negative branches handled"). A bare "looks fine" is

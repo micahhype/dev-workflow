@@ -1,6 +1,6 @@
 ---
 name: rollback
-description: Undo an AI agent's changes by restoring the git working tree to a checkpoint. Safe and reversible — saves current state first, never moves your branch, never hard-deletes. Optionally pass a checkpoint ref; defaults to the most recent.
+description: Undo an AI agent's changes by restoring the git working tree to a checkpoint — snapshots taken automatically before each agent edit. Safe and reversible — saves current state first, never moves your branch, never hard-deletes. Pass `list` to only list the checkpoints, or a checkpoint ref to restore; defaults to the most recent.
 allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py" list)
 ---
 
@@ -10,6 +10,11 @@ never moves your branch/HEAD, and never hard-deletes anything from git.
 
 The CLI is `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py" <cmd>` (this
 resolves to the plugin's `hooks/checkpoint.py`).
+
+**`list` (or the user only wants to see the checkpoints):** run the `list` command
+below, show the rows (`<ref>` `<timestamp>` `<tool>`) newest-first as a short table,
+and stop — change nothing. Rows marked `pre-rollback` are recovery points a previous
+rollback created. Checkpoints older than 14 days are deleted automatically.
 
 Steps:
 1. If the user did NOT name a checkpoint, first list them and show the user so

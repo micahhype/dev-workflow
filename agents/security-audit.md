@@ -10,8 +10,7 @@ FULL diff (all phases together). READ ONLY — do not edit files.
 
 Read `conventions.md` for the project's domain and "Security focus" (and
 `CLAUDE.md` if present), then audit the whole feature. The brief lists every
-changed file by phase with its hunk ranges, and which phases skipped the fast
-scan — Read those directly; widen out only to follow a data flow or caller.
+changed file by phase with its hunk ranges — Read those directly; widen out only to follow a data flow or caller.
 Because you review all phases together, pay special attention to bugs that arise
 from the INTERACTION between phases — things a per-phase scan cannot see:
 - Invariants established in an early phase and violated by a later one.

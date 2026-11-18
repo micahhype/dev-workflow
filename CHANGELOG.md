@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Checkpoints prune themselves.** Each new snapshot deletes checkpoint refs older than 14 days
+  (`DEV_WORKFLOW_CHECKPOINT_KEEP_DAYS`, `0` keeps everything); `checkpoint.py prune [days]` prunes
+  on demand. Ship points are never pruned. `/dev-workflow:config` shows the effective value.
+
+### Changed
+- **The feature skill loads less up front.** Bug mode, PR slicing, the UI prototype rule, the
+  final review and the lessons step moved to `skills/feature/references/`, read at the stage that
+  needs them. `SKILL.md` went from 746 to 588 lines.
+- **The security pass runs on every phase.** `code-reviewer` no longer waits for the brief to ask;
+  a phase with no sensitive surface gets a one-line pass. The final audit no longer back-fills
+  skipped phases.
+- **A review with no BLOCKING finding spends no round.** Its nits go to the user at the checkpoint
+  on `- Deferred nits:`. There are two labels, BLOCKING and NIT; "should-fix" is not one.
+- **Research no longer has its own checkpoint.** Stage 1 summarises and continues to the options
+  checkpoint, and stops only when the research contradicts the request.
+- `/dev-workflow:rollback list` replaces `/dev-workflow:checkpoints`.
+
+### Removed
+- The `/dev-workflow:checkpoints` skill and the Plan Mode step of Stage 3.
+
 ## [0.22.0] - 2026-11-04
 
 ### Added

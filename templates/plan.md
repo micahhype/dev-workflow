@@ -1,6 +1,6 @@
 # Plan: <feature name>
 
-> Source of truth for HOW. Derived from spec.md. Approved in Plan Mode before any
+> Source of truth for HOW. Derived from spec.md. Approved by the user before any
 > code is written.
 >
 > **Start from ONE phase and justify every additional one.** A phase costs a full
