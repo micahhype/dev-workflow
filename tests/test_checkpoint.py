@@ -159,3 +159,43 @@ def test_since_ship_of_an_unshipped_feature_fails_gracefully(git_repo):
 def test_ship_rejects_a_slug_that_is_not_a_ref_name(git_repo):
     proc = cp(git_repo, "ship", "../../heads/main")
     assert "not a feature slug" in proc.stderr
+
+
+def checkpoint_refs(repo):
+    import subprocess
+    out = subprocess.run(["git", "for-each-ref", "--format=%(refname)", "refs/dev-workflow"],
+                         cwd=repo, text=True, stdout=subprocess.PIPE).stdout
+    return out.split()
+
+
+def add_ref(repo, name):
+    import subprocess
+    subprocess.run(["git", "update-ref", name, "HEAD"], cwd=repo, check=True)
+
+
+OLD_CHECKPOINT = "refs/dev-workflow/checkpoints/20200101T000000.000000000-abcdef"
+
+
+def test_a_new_snapshot_prunes_expired_checkpoints_but_not_ship_points(git_repo):
+    add_ref(git_repo, OLD_CHECKPOINT)
+    add_ref(git_repo, "refs/dev-workflow/shipped/old-feature")
+    (git_repo / "a.txt").write_text("two\n")
+    run_hook("checkpoint.py", {"tool_name": "Edit", "cwd": str(git_repo)}, project_dir=git_repo)
+    refs = checkpoint_refs(git_repo)
+    assert OLD_CHECKPOINT not in refs
+    assert "refs/dev-workflow/shipped/old-feature" in refs
+    assert len(refs) == 2  # the fresh snapshot and the ship point
+
+
+def test_keep_days_zero_keeps_everything(git_repo):
+    add_ref(git_repo, OLD_CHECKPOINT)
+    (git_repo / "a.txt").write_text("two\n")
+    run_hook("checkpoint.py", {"tool_name": "Edit", "cwd": str(git_repo)}, project_dir=git_repo,
+             env={"DEV_WORKFLOW_CHECKPOINT_KEEP_DAYS": "0"})
+    assert OLD_CHECKPOINT in checkpoint_refs(git_repo)
+
+
+def test_prune_cli_reports_the_count(git_repo):
+    add_ref(git_repo, OLD_CHECKPOINT)
+    assert "Deleted 1 checkpoint" in cp(git_repo, "prune").stdout
+    assert checkpoint_refs(git_repo) == []

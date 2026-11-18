@@ -27,6 +27,7 @@ import os
 import re
 import sys
 
+import checkpoint
 import comment_guard
 import plan_guard
 import test_guard
@@ -293,6 +294,19 @@ def show(root):
         mark = " " if override is None else "<"
         out.append("    %-20s %-26s %s %s"
                    % (name, effective, mark, "default" if override is None else "file"))
+
+    days = checkpoint.keep_days()
+    env_days = (os.environ.get(checkpoint.KEEP_ENV) or "").strip()
+    if not env_days:
+        days_source = "default"
+    elif env_days.isdigit():
+        days_source = "env " + checkpoint.KEEP_ENV
+    else:
+        days_source = "env, IGNORED"
+    out.append("")
+    out.append("  %-22s %s" % ("checkpoints", checkpoint.KEEP_ENV))
+    out.append("    %-20s %-26s   %s"
+               % ("keep_days", "forever" if not days else days, days_source))
 
     gate = read(os.path.join(root, GATE_NAME))
     if gate is None:

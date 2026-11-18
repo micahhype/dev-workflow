@@ -7,8 +7,8 @@ commit on a shadow ref `refs/dev-workflow/checkpoints/<ts>` WITHOUT touching the
 user's index, HEAD, branch, or working tree. Always exits 0 and never denies —
 it is a side-effecting recorder, not a gate. Fails open on any error.
 
-As a CLI: `checkpoint.py snapshot | list | rollback [ref] | undo | ship <slug> |
-since-ship <slug> [path...]`.
+As a CLI: `checkpoint.py snapshot | list | rollback [ref] | undo | prune [days] |
+ship <slug> | since-ship <slug> [path...]`.
 
 `ship` records the tree a feature was handed over in, at
 `refs/dev-workflow/shipped/<slug>`; `since-ship` diffs that tree against the
@@ -29,7 +29,10 @@ the rollback itself is reversible (`undo`). Nothing is ever hard-deleted from gi
 
 Safety: operates only inside CLAUDE_PROJECT_DIR (never an arbitrary cwd); git is
 run with a timeout, non-interactive, and fsmonitor disabled. v1 scope: git repos
-only (silent no-op otherwise); no retention/pruning yet.
+only (silent no-op otherwise).
+
+Retention: each new snapshot deletes checkpoint refs older than KEEP_DAYS
+(`DEV_WORKFLOW_CHECKPOINT_KEEP_DAYS`, `0` keeps everything). Ship points are kept.
 """
 import json
 import os
@@ -42,6 +45,9 @@ import time
 
 REF_PREFIX = "refs/dev-workflow/checkpoints"
 SHIPPED_PREFIX = "refs/dev-workflow/shipped"
+KEEP_DAYS = 14
+KEEP_ENV = "DEV_WORKFLOW_CHECKPOINT_KEEP_DAYS"
+STAMP = re.compile(r"^\d{8}T\d{6}\.")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 MUTATING_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"}
 # Both are kept OUT of checkpoints and preserved live across a rollback: they are
@@ -54,7 +60,7 @@ _HARDEN = ["-c", "core.fsmonitor="]
 _TIMEOUT = 15
 
 
-def git(project_dir, args, env_extra=None, check=True):
+def git(project_dir, args, env_extra=None, check=True, stdin=None):
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_OPTIONAL_LOCKS"] = "0"
@@ -68,7 +74,7 @@ def git(project_dir, args, env_extra=None, check=True):
     try:
         p = subprocess.run(
             [_GIT] + _HARDEN + args,
-            cwd=project_dir, env=env,
+            cwd=project_dir, env=env, input=stdin,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=_TIMEOUT,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -152,6 +158,33 @@ def snapshot(project_dir, tool_name="", force=False):
     ref = f"{REF_PREFIX}/{_ref_stamp()}"
     git(project_dir, ["update-ref", ref, commit])
     return ref
+
+
+def keep_days():
+    """Days a checkpoint is kept; the default when the env value is not a whole number."""
+    raw = (os.environ.get(KEEP_ENV) or "").strip()
+    if not raw.isdigit():
+        return KEEP_DAYS
+    return int(raw)
+
+
+def prune(project_dir, days=None):
+    """Delete checkpoint refs older than `days`; 0 keeps everything. Returns the count."""
+    days = keep_days() if days is None else days
+    if not days:
+        return 0
+    cutoff = time.strftime("%Y%m%dT%H%M%S", time.gmtime(time.time() - days * 86400))
+    _, out = git(project_dir, ["for-each-ref", "--format=%(refname)", REF_PREFIX], check=False)
+    expired = [ref for ref in out.splitlines() if is_older(ref, cutoff)]
+    if expired:
+        deletes = "".join(f"delete {ref}\n" for ref in expired).encode()
+        git(project_dir, ["update-ref", "--stdin"], stdin=deletes)
+    return len(expired)
+
+
+def is_older(ref, cutoff):
+    stamp = ref.rsplit("/", 1)[-1]
+    return bool(STAMP.match(stamp)) and stamp < cutoff
 
 
 def shipped_ref(slug):
@@ -339,7 +372,9 @@ def hook_main():
     if payload.get("tool_name", "") not in MUTATING_TOOLS:
         return
     try:
-        snapshot(resolve_project_dir(payload), payload.get("tool_name", ""))
+        project_dir = resolve_project_dir(payload)
+        if snapshot(project_dir, payload.get("tool_name", "")):
+            prune(project_dir)
     except Exception:
         pass  # never block the tool call
 
@@ -370,6 +405,9 @@ def cli_main(argv):
         elif cmd == "undo":
             undo(project_dir)
             print("Reversed the last rollback.")
+        elif cmd == "prune":
+            days = int(argv[1]) if len(argv) > 1 else None
+            print(f"Deleted {prune(project_dir, days)} checkpoint(s).")
         elif cmd == "ship":
             ref = ship(project_dir, argv[1] if len(argv) > 1 else "")
             print(ref or "(not a git repo; nothing recorded)")
