@@ -123,7 +123,7 @@ missing.
 | `dw coded N` | every earlier phase is approved; `changed` and `evidence` are given |
 | `dw round N` | phase N is `coded` |
 | `dw reviewed N` | phase N is `coded`; the review map has at least one entry; `rounds` over 2 comes with `unresolved` |
-| `dw phases` | no phase has started; `dw phase add` appends after that |
+| `dw phases` | no phase has started; `dw add-phase` appends after that |
 | `dw approve N` | phase N is `reviewed`; evidence is at least 15 characters; the approval rule below holds |
 | `dw reopen N` | phase N is `reviewed` or `approved`; clears the approval |
 
@@ -138,7 +138,7 @@ writes with the plugin's current path. Agents and the user type the same short c
 ```
 dw new <slug> "<title>" [--tier T]     scaffold the feature, make it active
 dw phases "<title>" ["<title>" ...]    set the phase list after the plan is approved
-dw phase add "<title>"                 append a phase once work has started
+dw add-phase "<title>"                 append a phase once work has started
 dw coded N --changed "<text>"          evidence on stdin
 dw round N                             a fix round starts
 dw reviewed N [--security]             review map on stdin, one entry per line
@@ -213,6 +213,8 @@ unchanged and read-only.
 
 - Finished legacy features are never converted. The dashboard shows them as before.
 - A legacy feature in flight keeps the old rules until `dw import <slug>` converts it.
+  The import keeps the fields the state knows; the hand-written log is preserved next to
+  it as `phase-log.legacy.md`, so free-form notes are not lost.
 - New features always get `state.json`.
 - `legacy.py` is deleted once no project has an unfinished legacy feature.
 
@@ -223,6 +225,7 @@ unchanged and read-only.
 | More Bash round-trips than one Edit that ticks several boxes | Commands are compound: `coded` carries changed and evidence, `reviewed` carries the map and the security flag. A phase needs about four calls. |
 | Long text through stdin is awkward for the model | `dw set` also takes `--file <path>` |
 | Two writers at once (coder, orchestrator, dashboard) | Lock file around read-modify-write; atomic rename |
+| The shim is a `sh` script holding an absolute path, so it does not run on Windows and should not be committed | `.dev-workflow/` is meant to be gitignored; on Windows, call `python3 <plugin>/hooks/dw.py` |
 | The shim points at an old plugin path after an update | SessionStart rewrites it; `dw status` prints the plugin version |
 | Rendered `phase-log.md` drifts from what people expect | A test renders a fixture and compares it with the current template layout |
 | The relayed route accepts a prompt that was not an approval | The quote is stored and shown in the dashboard; `direct` mode removes the route |

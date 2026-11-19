@@ -1,0 +1,153 @@
+"""The dw command line: every state change goes through it, and a refusal changes nothing."""
+import json
+import os
+import subprocess
+import sys
+
+from conftest import HOOKS, phase, phase_log, run_hook
+
+sys.path.insert(0, HOOKS)
+import legacy  # noqa: E402
+
+TEMPLATE = os.path.join(os.path.dirname(HOOKS), "templates", "phase-log.md")
+EVIDENCE = "`pytest -q` -> 12 passed"
+REVIEW_MAP = "3 must-read / 0 skim / 0 skip of 3 lines\n- MUST `a.py:1-3` — parses → empty input?\n"
+OUTSIDE_CLAUDE = {"CLAUDECODE": ""}
+INSIDE_CLAUDE = {"CLAUDECODE": "1"}
+
+
+def dw(root, *args, stdin=None, env=None):
+    return run_hook("dw.py", stdin, project_dir=root, args=list(args), env=env or INSIDE_CLAUDE)
+
+
+def saved(root, slug="orders"):
+    path = root / ".dev-workflow" / "features" / slug / "state.json"
+    return json.loads(path.read_text())
+
+
+def reviewed_feature(root):
+    dw(root, "new", "orders", "Paginate orders")
+    dw(root, "phases", "only")
+    dw(root, "--by", "coder", "coded", "1", "--changed", "a.py", stdin=EVIDENCE)
+    return dw(root, "reviewed", "1", "--security", stdin=REVIEW_MAP)
+
+
+def test_new_creates_the_state_and_makes_the_feature_active(tmp_path):
+    assert dw(tmp_path, "new", "orders", "Paginate orders", "--tier", "standard").returncode == 0
+    assert saved(tmp_path)["tier"] == "standard"
+    assert (tmp_path / ".dev-workflow" / "active").read_text().strip() == "orders"
+    assert os.access(tmp_path / ".dev-workflow" / "dw", os.X_OK)
+
+
+def test_new_refuses_a_slug_that_would_leave_the_features_directory(tmp_path):
+    proc = dw(tmp_path, "new", "../escape", "x")
+    assert proc.returncode == 1 and "Not a feature slug" in proc.stderr
+
+
+def test_a_phase_is_coded_reviewed_and_recorded_with_who_did_it(tmp_path):
+    assert reviewed_feature(tmp_path).returncode == 0
+    state = saved(tmp_path)
+    recorded = state["phases"][0]
+    assert recorded["status"] == "reviewed" and recorded["security_scanned"] is True
+    assert recorded["review_summary"].startswith("3 must-read")
+    assert recorded["review_map"] == [{"tier": "MUST", "text": "`a.py:1-3` — parses → empty input?"}]
+    assert [event["by"] for event in state["events"]] == ["orchestrator", "coder", "orchestrator"]
+
+
+def test_a_refusal_exits_nonzero_says_why_and_changes_nothing(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    dw(tmp_path, "phases", "only")
+    proc = dw(tmp_path, "reviewed", "1", stdin=REVIEW_MAP)
+    assert proc.returncode == 1 and "pending, not coded" in proc.stderr
+    assert saved(tmp_path)["phases"][0]["status"] == "pending"
+
+
+def test_a_review_map_line_without_a_tier_is_refused(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    dw(tmp_path, "phases", "only")
+    dw(tmp_path, "coded", "1", "--changed", "a.py", stdin=EVIDENCE)
+    proc = dw(tmp_path, "reviewed", "1", stdin=REVIEW_MAP + "check the parser\n")
+    assert proc.returncode == 1 and "Not a review-map line" in proc.stderr
+
+
+def test_claude_cannot_run_a_bare_approve_but_the_user_can(tmp_path):
+    reviewed_feature(tmp_path)
+    refused = dw(tmp_path, "approve", env=INSIDE_CLAUDE)
+    assert refused.returncode == 1 and "YOUR approval" in refused.stderr
+    assert saved(tmp_path)["phases"][0]["status"] == "reviewed"
+
+    assert dw(tmp_path, "approve", env=OUTSIDE_CLAUDE).returncode == 0
+    state = saved(tmp_path)
+    assert state["phases"][0]["approval"]["via"] == "user"
+    assert state["events"][-1] == {"by": "user", "do": "approve", "phase": 1,
+                                   "at": state["events"][-1]["at"]}
+
+
+def test_a_relayed_approval_keeps_the_users_words(tmp_path):
+    reviewed_feature(tmp_path)
+    assert dw(tmp_path, "approve", "1", "--said", "ok ship it").returncode == 0
+    approval = saved(tmp_path)["phases"][0]["approval"]
+    assert approval["via"] == "relayed" and approval["quote"] == "ok ship it"
+
+
+def test_set_writes_phase_and_feature_text_and_refuses_an_unknown_field(tmp_path):
+    reviewed_feature(tmp_path)
+    assert dw(tmp_path, "set", "1", "user_notes", stdin="rename the helper\n").returncode == 0
+    assert dw(tmp_path, "set", "feature", "lessons", stdin="none").returncode == 0
+    assert dw(tmp_path, "set", "1", "status", stdin="approved").returncode == 1
+    state = saved(tmp_path)
+    assert state["phases"][0]["user_notes"] == "rename the helper"
+    assert state["lessons"] == "none" and state["phases"][0]["status"] == "reviewed"
+
+
+def test_status_lists_the_sections_and_marks_the_current_one(tmp_path):
+    reviewed_feature(tmp_path)
+    out = dw(tmp_path, "status").stdout
+    assert "Paginate orders (orders)" in out
+    assert "[reviewed] Phase 1 — only  <- current" in out
+
+
+def legacy_feature(root, log):
+    directory = root / ".dev-workflow" / "features" / "old"
+    directory.mkdir(parents=True)
+    (directory / "phase-log.md").write_text(log)
+    return directory
+
+
+def test_import_converts_a_legacy_log_and_keeps_the_original(tmp_path):
+    log = phase_log(phase("Phase 1 — parser", reviewed=True, approved=True, evidence=EVIDENCE),
+                    phase("Phase 2 — wiring", reviewed=True, evidence=EVIDENCE),
+                    feature="Old feature")
+    directory = legacy_feature(tmp_path, log)
+    assert dw(tmp_path, "import", "old").returncode == 0
+    state = saved(tmp_path, "old")
+    assert state["title"] == "Old feature"
+    assert [(p["title"], p["status"]) for p in state["phases"]] == [
+        ("parser", "approved"), ("wiring", "reviewed")]
+    assert state["phases"][1]["evidence"] == EVIDENCE
+    assert (directory / "phase-log.legacy.md").read_text() == log
+    assert "Generated from state.json" in (directory / "phase-log.md").read_text()
+
+    again = dw(tmp_path, "import", "old")
+    assert again.returncode == 1 and "already has a state.json" in again.stderr
+
+
+def test_the_untouched_template_imports_as_one_pending_phase():
+    with open(TEMPLATE, encoding="utf-8") as source:
+        state = legacy.state_from_log(source.read(), "fresh")
+    assert state["title"] == "fresh"
+    assert [p["status"] for p in state["phases"]] == ["pending"]
+    assert state["phases"][0]["evidence"] is None and state["phases"][0]["review_map"] == []
+    assert state["final_review"]["status"] == "pending" and state["lessons"] is None
+
+
+def test_session_start_writes_a_launcher_that_works_from_a_subdirectory(tmp_path):
+    reviewed_feature(tmp_path)
+    (tmp_path / ".dev-workflow" / "dw").unlink()
+    run_hook("status.py", {"source": "startup"}, project_dir=tmp_path)
+    (tmp_path / "src").mkdir()
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    out = subprocess.run([str(tmp_path / ".dev-workflow" / "dw"), "status"], cwd=tmp_path / "src",
+                         env=env, text=True, stdout=subprocess.PIPE).stdout
+    assert "Phase 1 — only" in out

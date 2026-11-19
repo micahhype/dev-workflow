@@ -13,6 +13,7 @@ import re
 import sys
 import tempfile
 
+import shim
 from _workflow import STATE_DIR, docs_dir, iter_phases, read
 
 # Ensure UTF-8 output regardless of the host locale (Windows pipes default to
@@ -101,6 +102,7 @@ def write_registry(roots):
 def main():
     root, source = read_input()
     register(root)
+    shim.write(root)
     ddir, slug = docs_dir(root)
     log = read(os.path.join(ddir, "phase-log.md"))
     if not log:
