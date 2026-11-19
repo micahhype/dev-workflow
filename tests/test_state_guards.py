@@ -89,3 +89,9 @@ def test_the_gate_leaves_hand_written_logs_and_unrelated_state_files_alone(tmp_p
     for path in (legacy / "phase-log.md", legacy / "spec.md", tmp_path / "state.json",
                  tmp_path / "src" / "state.json"):
         assert hook_json(run_hook("gate.py", edit(path), project_dir=tmp_path)) is None
+
+
+def test_the_gate_refuses_edits_to_the_prompt_stamp(tmp_path):
+    reviewed_feature(tmp_path)
+    stamp = tmp_path / ".dev-workflow" / "user-prompt.json"
+    assert denied(run_hook("gate.py", edit(stamp), project_dir=tmp_path))

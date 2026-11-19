@@ -164,11 +164,16 @@ An approval is accepted through one of two routes.
 | Direct | the user types `/dev-workflow:approve`, runs `! .dev-workflow/dw approve`, or presses the dashboard button | `via: "user"` |
 | Relayed | the user approves in plain words and the orchestrator runs `dw approve --said "<their words>"` | `via: "relayed"` with the quote |
 
-- `/dev-workflow:approve` is handled by a new `UserPromptSubmit` hook. The harness runs
-  it with the text the user typed, so the model takes no part in it.
-- The same hook stamps the time of every user prompt. A relayed approval is refused
-  unless a prompt arrived after the phase became `reviewed`. This closes the case that
-  matters most: a phase approved in the turn that reviewed it.
+- `/dev-workflow:approve` is recorded by a `UserPromptExpansion` hook. That event fires
+  only for a command the user typed; Claude calling the command does not reach it, and
+  the command is marked so Claude cannot invoke it at all.
+- A `UserPromptSubmit` hook stamps the time of every prompt the user sends. A relayed
+  approval is refused unless that stamp is at or after the time the phase was reviewed.
+  This closes the case that matters most: a phase approved in the turn that reviewed it.
+- Claude Code also raises `UserPromptSubmit` for turns it starts itself, such as a
+  background agent reporting back, and gives the hook no field that tells them apart.
+  The hook skips the ones it can recognise by their text. One it does not recognise
+  would count as the user speaking, so `direct` mode is the strict choice.
 - `dw approve` without `--said` refuses when it runs inside Claude Code.
 - `approval.mode` in the project config is `relayed` (default) or `direct`. With
   `direct`, relayed approvals are refused.
@@ -185,7 +190,7 @@ workaround, where today it takes ticking the box the prompt describes.
 | `evidence_guard.py` (Stop) | parses the current phase | same check, on the log rendered from the state |
 | `plan_guard.py` (Stop) | parses `plan.md` and `phase-log.md` | same checks, on the log rendered from the state |
 | `gate.py` (PreToolUse) | guards `.approval-gate` | also denies the edit tools on a feature's `state.json` and on the `phase-log.md` rendered beside it, naming the command to use. Bash is not filtered: this is a signpost for the model, like the rest of the gate |
-| new (UserPromptSubmit) | — | stamps the prompt time; handles `/dev-workflow:approve` |
+| new `prompt.py` (UserPromptSubmit, UserPromptExpansion) | — | stamps the prompt time; records `/dev-workflow:approve` |
 | `dashboard.py`, `mark_done.py` | parse and rewrite markdown | read the log rendered from `state.json`; Mark done approves every open section in the state, recorded as `via: "marked-done"` |
 
 The Stop hooks keep their bound of three refusals. Most of what they catch today
@@ -246,8 +251,8 @@ Stacked PRs, each mergeable alone and under 300 changed lines where possible.
 4. **Guards.** `evidence_guard.py` and `plan_guard.py` read the log through
    `state.log_text`; `dw check` reports the same findings on demand; `gate.py` protects
    the generated files.
-5. **Approval.** The `UserPromptSubmit` hook, `/dev-workflow:approve`, the relayed rule,
-   `approval.mode` in the config readout.
+5. **Approval.** The prompt hook, `/dev-workflow:approve`, the relayed rule,
+   `approval.mode` in the config readout (`.dev-workflow/approval.json`).
 6. **Prompts.** `SKILL.md`, `coder.md`, templates and README move to the commands.
    This is the PR that turns the new path on for new features.
 

@@ -7,6 +7,7 @@ import re
 import sys
 
 import _workflow
+import approval as approval_rules
 import evidence_guard
 import legacy
 import plan_guard
@@ -145,7 +146,13 @@ def approve(root, args):
     if not args.said and os.environ.get("CLAUDECODE"):
         raise Refused("This records YOUR approval, so Claude must not run it bare. Run it in "
                       'your own shell, or relay the user\'s words: dw approve --said "<quote>"')
-    approval = {"via": "relayed", "quote": args.said} if args.said else {"via": "user"}
+    if args.said and approval_rules.load_config(root)["mode"] == "direct":
+        raise Refused("This project accepts direct approvals only: the user types "
+                      "/dev-workflow:approve, or runs `! .dev-workflow/dw approve`.")
+    approval = {"via": "user"}
+    if args.said:
+        approval = {"via": "relayed", "quote": args.said,
+                    "prompted_at": approval_rules.prompted_at(root)}
     args.by = "orchestrator" if args.said else "user"
 
     if not args.phase:

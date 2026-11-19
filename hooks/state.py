@@ -47,7 +47,8 @@ def new_state(slug, title, tier="trivial"):
 
 def new_phase(number, title):
     phase = {"id": number, "title": title, "status": "pending", "rounds": 0,
-             "security_scanned": False, "review_map": [], "approval": None}
+             "security_scanned": False, "review_map": [], "reviewed_at": None,
+             "approval": None}
     phase.update({field: None for field in PHASE_TEXT})
     return phase
 
@@ -136,6 +137,7 @@ def mark_reviewed(state, target, review):
         raise Refused("%s took %d review rounds (budget %d). Record what the user decided "
                       "in `unresolved` first." % (label(phase), phase["rounds"], MAX_ROUNDS))
     phase["security_scanned"] = bool(review.get("security_scanned"))
+    phase["reviewed_at"] = now()
     phase["status"] = "reviewed"
 
 
@@ -150,7 +152,8 @@ def checked_map(entries):
 
 
 def approve(state, target, approval):
-    """`approval` carries `via` (user | relayed) and, when relayed, the user's `quote`."""
+    """`approval` carries `via` (user | relayed); a relayed one also carries the user's
+    `quote` and `prompted_at`, when the user last spoke."""
     phase = section(state, target)
     require_status(phase, "reviewed")
     if len((phase["evidence"] or "").strip()) < MIN_EVIDENCE:
@@ -158,10 +161,19 @@ def approve(state, target, approval):
     via = approval.get("via")
     if via not in APPROVAL_ROUTES:
         raise Refused("An approval arrives via %s." % " or ".join(APPROVAL_ROUTES))
-    if via == "relayed" and not filled(approval.get("quote")):
-        raise Refused("A relayed approval needs the user's words as its quote.")
+    if via == "relayed":
+        require_relayable(phase, approval)
     phase["approval"] = {"at": now(), "via": via, "quote": approval.get("quote")}
     phase["status"] = "approved"
+
+
+def require_relayable(phase, approval):
+    if not filled(approval.get("quote")):
+        raise Refused("A relayed approval needs the user's words as its quote.")
+    if (approval.get("prompted_at") or "") < (phase.get("reviewed_at") or ""):
+        raise Refused("The user has not said anything since %s was reviewed, so there is "
+                      "no approval to relay. Present the review and wait for them."
+                      % label(phase).lower())
 
 
 def reopen(state, target):

@@ -49,6 +49,7 @@ WORKING_DOC_NAMES = {"spec.md", "plan.md", "phase-log.md", "conventions.md",
 STATE_DIR = ".dev-workflow"
 GATE_NAME = ".approval-gate"
 
+PROMPT_STAMP = "user-prompt.json"
 STATE_NAME = "state.json"
 LOG_NAME = "phase-log.md"
 GENERATED_MSG = (
@@ -131,8 +132,10 @@ def bash_touches_gate(command):
 
 
 def is_generated(fp):
-    """A feature's state.json, or the phase-log.md rendered beside one."""
+    """A feature's state.json, the phase-log.md rendered beside one, or the prompt stamp."""
     directory = os.path.dirname(os.path.abspath(fp))
+    if os.path.basename(fp) == PROMPT_STAMP and os.path.basename(directory) == STATE_DIR:
+        return True
     if os.path.basename(os.path.dirname(directory)) != "features":
         return False
     name = os.path.basename(fp)

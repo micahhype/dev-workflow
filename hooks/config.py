@@ -27,6 +27,7 @@ import os
 import re
 import sys
 
+import approval
 import checkpoint
 import comment_guard
 import plan_guard
@@ -172,6 +173,10 @@ def plan_section(root):
     return [Knob("pr_cap", ["pr_cap"], cfg["pr_cap"], plan_guard.PR_CAP)]
 
 
+def approval_section(root):
+    return [Knob("mode", ["mode"], approval.load_config(root)["mode"], approval.MODE)]
+
+
 # --- problems ---------------------------------------------------------------
 # Everything a guard shrugs off in silence. Each entry is (severity, text) where
 # severity "!" means the file is not doing what it looks like it does.
@@ -267,6 +272,9 @@ def show(root):
     check_common(problems, "test-guard.json", tg_raw, tg_problem, tg_knobs,
                  "DEV_WORKFLOW_TEST_GUARD")
     check_common(problems, "plan-guard.json", pg_raw, pg_problem, pg_knobs, None)
+    ap_raw, ap_problem = read_json(os.path.join(root, STATE_DIR, approval.CONFIG_NAME))
+    ap_knobs = approval_section(root)
+    check_common(problems, approval.CONFIG_NAME, ap_raw, ap_problem, ap_knobs, None)
 
     agent_list = agents()
     check_models(problems, md_raw, md_problem, {a for a, _ in agent_list})
@@ -285,6 +293,8 @@ def show(root):
                    tg_knobs, tg_raw, "DEV_WORKFLOW_TEST_GUARD")
     render_section(out, "plan guard", ".dev-workflow/plan-guard.json",
                    pg_knobs, pg_raw, None)
+    render_section(out, "approval", ".dev-workflow/" + approval.CONFIG_NAME,
+                   ap_knobs, ap_raw, None)
 
     out.append("")
     out.append("  %-22s %s" % ("agent models", ".dev-workflow/models.json"))
@@ -341,10 +351,11 @@ TARGETS = {
         "max_empty_args": (["max_empty_args"], int),
     }),
     "plan-guard": ("plan-guard.json", {"pr_cap": (["pr_cap"], int)}),
+    "approval": (approval.CONFIG_NAME, {"mode": (["mode"], approval.MODES)}),
 }
 
 SECTIONS = {"comment-guard": comment_section, "test-guard": test_section,
-            "plan-guard": plan_section}
+            "plan-guard": plan_section, "approval": approval_section}
 
 
 def coerce(value, kind):
@@ -356,6 +367,8 @@ def coerce(value, kind):
         return int(value)
     if kind is float:
         return float(value)
+    if isinstance(kind, tuple) and value not in kind:
+        raise ValueError("expected one of %s, got %r" % (" / ".join(kind), value))
     return value
 
 
@@ -382,13 +395,13 @@ def default_for(root, group, key):
 def set_value(root, dotted, value):
     parts = dotted.split(".", 1)
     if len(parts) != 2:
-        return "Not a key: %r. Try comment-guard.density.floor, test-guard.checks.fakes, plan-guard.pr_cap, or models.coder." % dotted
+        return "Not a key: %r. Try comment-guard.density.floor, test-guard.checks.fakes, plan-guard.pr_cap, approval.mode, or models.coder." % dotted
     group, key = parts
 
     if group == "models":
         return set_model(root, key, value)
     if group not in TARGETS:
-        return "Unknown group %r. Groups: comment-guard, test-guard, plan-guard, models." % group
+        return "Unknown group %r. Groups: comment-guard, test-guard, plan-guard, approval, models." % group
 
     fname, keys = TARGETS[group]
     if key not in keys:

@@ -83,11 +83,73 @@ def test_claude_cannot_run_a_bare_approve_but_the_user_can(tmp_path):
                                    "at": state["events"][-1]["at"]}
 
 
-def test_a_relayed_approval_keeps_the_users_words(tmp_path):
+def user_says(root, prompt):
+    return run_hook("prompt.py", {"hook_event_name": "UserPromptSubmit", "prompt": prompt},
+                    project_dir=root)
+
+
+def test_a_relayed_approval_needs_the_user_to_have_spoken_since_the_review(tmp_path):
     reviewed_feature(tmp_path)
+    stamp = tmp_path / ".dev-workflow" / "user-prompt.json"
+    stamp.write_text('{"at": "2020-01-01T00:00:00Z"}')
+    refused = dw(tmp_path, "approve", "1", "--said", "ok ship it")
+    assert refused.returncode == 1 and "has not said anything since phase 1" in refused.stderr
+
+    user_says(tmp_path, "<task-notification>reviewer finished</task-notification>")
+    assert dw(tmp_path, "approve", "1", "--said", "ok ship it").returncode == 1
+
+    user_says(tmp_path, "ok ship it")
     assert dw(tmp_path, "approve", "1", "--said", "ok ship it").returncode == 0
     approval = saved(tmp_path)["phases"][0]["approval"]
     assert approval["via"] == "relayed" and approval["quote"] == "ok ship it"
+
+
+def test_direct_mode_refuses_a_relayed_approval(tmp_path):
+    reviewed_feature(tmp_path)
+    user_says(tmp_path, "ok ship it")
+    (tmp_path / ".dev-workflow" / "approval.json").write_text('{"mode": "direct"}')
+    refused = dw(tmp_path, "approve", "1", "--said", "ok ship it")
+    assert refused.returncode == 1 and "direct approvals only" in refused.stderr
+    assert saved(tmp_path)["phases"][0]["status"] == "reviewed"
+
+
+def typed_approve(root, args=""):
+    payload = {"hook_event_name": "UserPromptExpansion", "command_name": "dev-workflow:approve",
+               "command_args": args, "prompt": "/dev-workflow:approve " + args}
+    out = run_hook("prompt.py", payload, project_dir=root).stdout
+    return json.loads(out)["hookSpecificOutput"]["additionalContext"] if out.strip() else None
+
+
+def test_typing_the_approve_command_records_a_direct_approval(tmp_path):
+    reviewed_feature(tmp_path)
+    assert "approval is recorded for phase 1 of orders" in typed_approve(tmp_path)
+    state = saved(tmp_path)
+    assert state["phases"][0]["approval"]["via"] == "user"
+    assert state["events"][-1]["by"] == "user"
+    assert "already approved" in typed_approve(tmp_path)
+
+
+def test_the_approve_command_says_why_a_phase_cannot_be_approved_yet(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    dw(tmp_path, "phases", "only")
+    assert "Phase 1 is pending, not reviewed" in typed_approve(tmp_path)
+    assert saved(tmp_path)["phases"][0]["status"] == "pending"
+
+
+def test_the_approve_command_on_a_hand_written_log_hands_the_tick_to_claude(tmp_path):
+    legacy_feature(tmp_path, phase_log(phase("Phase 1 — parser", reviewed=True)))
+    (tmp_path / ".dev-workflow" / "active").write_text("old\n")
+    assert "has no state.json" in typed_approve(tmp_path)
+
+
+def test_the_prompt_hook_ignores_other_commands_and_projects_without_the_workflow(tmp_path):
+    payload = {"hook_event_name": "UserPromptExpansion", "command_name": "dev-workflow:status"}
+    reviewed_feature(tmp_path)
+    assert run_hook("prompt.py", payload, project_dir=tmp_path).stdout == ""
+    bare = tmp_path / "elsewhere"
+    bare.mkdir()
+    user_says(bare, "hello")
+    assert not (bare / ".dev-workflow").exists()
 
 
 def test_set_writes_phase_and_feature_text_and_refuses_an_unknown_field(tmp_path):

@@ -261,3 +261,16 @@ def test_a_malformed_invocation_prints_usage(tmp_path, args):
     proc = run(tmp_path, *args)
     assert proc.returncode == 2
     assert "usage: config.py" in proc.stdout
+
+
+def test_approval_mode_is_shown_set_and_validated(tmp_path):
+    def config(*args):
+        return run_hook("config.py", None, project_dir=tmp_path, args=list(args)).stdout
+
+    (tmp_path / ".dev-workflow").mkdir()
+    assert "relayed" in config("show")
+    assert "expected one of relayed / direct" in config("set", "approval.mode", "always")
+    config("set", "approval.mode", "direct")
+    assert '"mode": "direct"' in (tmp_path / ".dev-workflow" / "approval.json").read_text()
+    shown = [line for line in config("show").splitlines() if line.strip().startswith("mode")]
+    assert "direct" in shown[0] and "file" in shown[0]

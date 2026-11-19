@@ -27,7 +27,7 @@ MODEL_ALLOWED = {
 KNOWN_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "MultiEdit", "Bash",
                "WebSearch", "WebFetch", "Task", "NotebookEdit"}
 KNOWN_HOOK_EVENTS = {
-    "PreToolUse", "PostToolUse", "PostToolBatch", "UserPromptSubmit",
+    "PreToolUse", "PostToolUse", "PostToolBatch", "UserPromptSubmit", "UserPromptExpansion",
     "SessionStart", "SessionEnd", "Stop", "SubagentStart", "SubagentStop",
     "PreCompact", "PostCompact", "Notification",
 }
