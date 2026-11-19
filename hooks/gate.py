@@ -49,6 +49,15 @@ WORKING_DOC_NAMES = {"spec.md", "plan.md", "phase-log.md", "conventions.md",
 STATE_DIR = ".dev-workflow"
 GATE_NAME = ".approval-gate"
 
+STATE_NAME = "state.json"
+LOG_NAME = "phase-log.md"
+GENERATED_MSG = (
+    "This file is written only by the `dw` command: state.json is the workflow state "
+    "and phase-log.md is rendered from it, so an edit here is refused or overwritten.\n"
+    "Change the state with `.dev-workflow/dw <command>` (`.dev-workflow/dw --help` "
+    "lists them): coded, round, reviewed, set, reopen."
+)
+
 GATE_EDIT_MSG = (
     "Only you can change the approval gate. Run it in YOUR shell so it is not a "
     "Claude tool call:\n"
@@ -121,6 +130,17 @@ def bash_touches_gate(command):
     return glob_hits_gate(stripped, min_literal=6)
 
 
+def is_generated(fp):
+    """A feature's state.json, or the phase-log.md rendered beside one."""
+    directory = os.path.dirname(os.path.abspath(fp))
+    if os.path.basename(os.path.dirname(directory)) != "features":
+        return False
+    name = os.path.basename(fp)
+    if name == STATE_NAME:
+        return True
+    return name == LOG_NAME and os.path.isfile(os.path.join(directory, STATE_NAME))
+
+
 def target_path(tool_input):
     """The file an edit-tool call writes: `file_path` for Edit/Write/MultiEdit,
     `notebook_path` for NotebookEdit."""
@@ -154,6 +174,8 @@ def main():
         fp = target_path(tool_input)
         if fp and os.path.basename(fp) == GATE_NAME:
             deny(GATE_EDIT_MSG)
+        if fp and is_generated(fp):
+            deny(GENERATED_MSG)
     elif tool == "Bash":
         if bash_touches_gate(tool_input.get("command", "")):
             deny(GATE_EDIT_MSG)

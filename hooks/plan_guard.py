@@ -49,6 +49,8 @@ import sys
 
 import _workflow
 import diff_budget
+import evidence_guard
+import state as workflow_state
 from _workflow import STATE_DIR, docs_dir, field_text, is_unfilled, iter_phases, read
 
 # `#{2,3}` because the template writes `### Phase 1 — ...` but a hand-written plan
@@ -65,7 +67,7 @@ REVIEWED = re.compile(r"\[[xX]\]\s*code-reviewed")
 # `(?!`?<)`: the template's own example entries are `<placeholders>`, not a map.
 MAP_ENTRY = re.compile(r"^[ \t]*-[ \t]*(?:MUST|SKIM|SKIP)[ \t]+(?!`?<)\S", re.MULTILINE)
 
-MAX_ROUNDS = 2  # keep in step with the review-round budget in skills/feature/SKILL.md
+MAX_ROUNDS = workflow_state.MAX_ROUNDS
 MAX_BLOCKS = 3
 BUDGET_FACTOR = 2
 BUDGET_SLACK = 40  # lines; a 10-line estimate should not refuse a 25-line phase
@@ -361,6 +363,21 @@ def diff_budget_findings(root, slug, plan, log):
             "in this section's `- Over budget:` line and tell the user before they review."]
 
 
+def document_findings(root, plan, log):
+    """Everything the guard reads off plan.md and the log; the measured diff is separate
+    because measuring it writes git objects."""
+    findings = []
+    if plan:
+        findings += plan_findings(plan)
+        findings += pr_findings(plan, load_config(root)["pr_cap"])
+    if log:
+        findings += budget_findings(log)
+        findings += map_findings(log, root)
+        findings += lessons_findings(log)
+        findings += review_map_findings(log)
+    return findings
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -370,19 +387,14 @@ def main():
     root = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
     ddir, slug = docs_dir(root)
 
-    findings = []
     plan = read(os.path.join(ddir, "plan.md"))
-    if plan:
-        findings += plan_findings(plan)
-        findings += pr_findings(plan, load_config(root)["pr_cap"])
-    log = read(os.path.join(ddir, "phase-log.md"))
-    if log:
-        findings += budget_findings(log)
-        findings += map_findings(log, root)
-        findings += lessons_findings(log)
-        findings += review_map_findings(log)
-        if plan:
-            findings += diff_budget_findings(root, slug, plan, log)
+    try:
+        log = workflow_state.log_text(ddir)
+    except workflow_state.Corrupt as problem:
+        evidence_guard.unreadable(problem)
+    findings = document_findings(root, plan, log)
+    if plan and log:
+        findings += diff_budget_findings(root, slug, plan, log)
 
     key = f"{slug or ''}::plan"
     if not findings:

@@ -28,7 +28,8 @@ import re
 import sys
 
 import _workflow
-from _workflow import docs_dir, field_text, is_unfilled, iter_phases, read
+import state as workflow_state
+from _workflow import docs_dir, field_text, is_unfilled, iter_phases
 
 REVIEW_DONE = re.compile(r"\[[xX]\]\s*(?:code-reviewed|full code review)")
 
@@ -60,7 +61,23 @@ def evidence_empty(body):
     short to be real cited proof. The field-extraction rules (where a field ends,
     what counts as a placeholder) live in `_workflow`; the 15-character floor is
     this gate's own — "ok" is technically content but is not proof."""
-    return is_unfilled(field_text(body, "Evidence"), min_len=15)
+    return is_unfilled(field_text(body, "Evidence"), min_len=workflow_state.MIN_EVIDENCE)
+
+
+def current_section(log):
+    """(title, body) of the first unapproved section, or None when all are approved."""
+    return next(((title, body) for title, body, approved in iter_phases(log) if not approved),
+                None)
+
+
+def unproven(body):
+    return bool(REVIEW_DONE.search(body)) and evidence_empty(body)
+
+
+def unreadable(problem):
+    print(json.dumps({"systemMessage": "[dev-workflow] %s — the workflow guards cannot "
+                                       "check this feature until it is fixed." % problem}))
+    sys.exit(0)
 
 
 def block(reason):
@@ -76,57 +93,57 @@ def main():
 
     root = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd()
     ddir, slug = docs_dir(root)
-    log = read(os.path.join(ddir, "phase-log.md"))
+    try:
+        log = workflow_state.log_text(ddir)
+    except workflow_state.Corrupt as problem:
+        unreadable(problem)
     if not log:
         sys.exit(0)  # no active workflow
 
-    current_key = None
-    for title, body, approved in iter_phases(log):
-        if approved:
-            continue  # this phase is done; look at the next
-        # First UNAPPROVED section = the current one. Gate only this one.
-        current_key = f"{slug or ''}::{title}"
-        if REVIEW_DONE.search(body) and evidence_empty(body):
-            count = load_counter(root, current_key) + 1
-            # Persist BEFORE deciding, including past the limit: forgetting the
-            # count on give-up would re-arm the gate on the next stop, so it would
-            # oscillate (block, block, block, pass, block...) instead of staying
-            # given up — and the give-up warning would never survive to be seen.
-            saved = save_counter(root, current_key, count)
+    current = current_section(log)
+    if current is None:
+        sys.exit(0)  # every section is approved
+    title, body = current
+    current_key = f"{slug or ''}::{title}"
+    if unproven(body):
+        count = load_counter(root, current_key) + 1
+        # Persist BEFORE deciding, including past the limit: forgetting the
+        # count on give-up would re-arm the gate on the next stop, so it would
+        # oscillate (block, block, block, pass, block...) instead of staying
+        # given up — and the give-up warning would never survive to be seen.
+        saved = save_counter(root, current_key, count)
 
-            # Give up when the count reaches the bound — OR when we could not even
-            # persist the count AND have already blocked once this turn (the flag
-            # Claude Code sets on a stop that a hook blocked). The second clause is
-            # the backstop: if `.dev-workflow/` is read-only or full, `count` is
-            # pinned at 1 forever, so without it the gate would block on every stop
-            # and trap the turn. It bounds a broken counter at one block.
-            unproven_msg = json.dumps({"systemMessage":
-                "[dev-workflow evidence gate] GAVE UP: '" + title + "' is marked "
-                "reviewed but its Evidence ledger is still empty. Letting the turn "
-                "end so it cannot be trapped — but this phase is UNPROVEN. Do not "
-                "approve it on the strength of the summary alone."})
-            if count > MAX_BLOCKS or (not saved and payload.get("stop_hook_active")):
-                print(unproven_msg)
-                sys.exit(0)
+        # Give up when the count reaches the bound — OR when we could not even
+        # persist the count AND have already blocked once this turn (the flag
+        # Claude Code sets on a stop that a hook blocked). The second clause is
+        # the backstop: if `.dev-workflow/` is read-only or full, `count` is
+        # pinned at 1 forever, so without it the gate would block on every stop
+        # and trap the turn. It bounds a broken counter at one block.
+        unproven_msg = json.dumps({"systemMessage":
+            "[dev-workflow evidence gate] GAVE UP: '" + title + "' is marked "
+            "reviewed but its Evidence ledger is still empty. Letting the turn "
+            "end so it cannot be trapped — but this phase is UNPROVEN. Do not "
+            "approve it on the strength of the summary alone."})
+        if count > MAX_BLOCKS or (not saved and payload.get("stop_hook_active")):
+            print(unproven_msg)
+            sys.exit(0)
 
-            block(
-                "[dev-workflow evidence gate] '" + title + "' is marked "
-                "reviewed but its Evidence ledger in phase-log.md is empty. Before "
-                "yielding for the user's approval, fill this phase's `- Evidence:` line "
-                "with CITED proof — test/command output, file:line, the concrete cases "
-                "verified — mapping to each acceptance criterion (not \"looks fine\"). "
-                "Run the tests and paste what they actually printed; if you cannot prove "
-                "it, say so to the user instead of ending the turn. "
-                f"(Refusal {count} of {MAX_BLOCKS}; stopping again without filling the "
-                "ledger will simply be refused again.)"
-            )
-        break  # only the current section is gated
+        block(
+            "[dev-workflow evidence gate] '" + title + "' is marked "
+            "reviewed but its Evidence ledger in phase-log.md is empty. Before "
+            "yielding for the user's approval, fill this phase's `- Evidence:` line "
+            "with CITED proof — test/command output, file:line, the concrete cases "
+            "verified — mapping to each acceptance criterion (not \"looks fine\"). "
+            "Run the tests and paste what they actually printed; if you cannot prove "
+            "it, say so to the user instead of ending the turn. "
+            f"(Refusal {count} of {MAX_BLOCKS}; stopping again without filling the "
+            "ledger will simply be refused again.)"
+        )
 
     # Reached only when the current phase is proven (or the feature is done): clear
     # just this phase's budget so a later re-emptying gets a fresh one.
-    if current_key:
-        clear_counter(root, current_key)
-    sys.exit(0)  # fail open
+    clear_counter(root, current_key)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

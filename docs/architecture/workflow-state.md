@@ -148,7 +148,7 @@ dw set feature <field>                 project_map, lessons, post_ship_reviewed
 dw approve [N] [--said "<quote>"]
 dw reopen N
 dw status [--json]                     what SessionStart prints and the dashboard reads
-dw check                               findings for the Stop hooks
+dw check                               what the Stop hooks would refuse the turn for
 dw import <slug>                       build state.json from a legacy phase-log.md
 ```
 
@@ -182,9 +182,9 @@ workaround, where today it takes ticking the box the prompt describes.
 | Hook | Today | With `state.json` |
 |---|---|---|
 | `status.py` (SessionStart) | parses headings and ticks | prints `dw status`; rewrites the shim |
-| `evidence_guard.py` (Stop) | parses the current phase | folded into `dw check` |
-| `plan_guard.py` (Stop) | parses `plan.md` and `phase-log.md` | keeps the `plan.md` checks; phase checks come from `dw check` |
-| `gate.py` (PreToolUse) | guards `.approval-gate` | also denies Edit and Write on `state.json` and on a generated `phase-log.md`, naming the command to use |
+| `evidence_guard.py` (Stop) | parses the current phase | same check, on the log rendered from the state |
+| `plan_guard.py` (Stop) | parses `plan.md` and `phase-log.md` | same checks, on the log rendered from the state |
+| `gate.py` (PreToolUse) | guards `.approval-gate` | also denies the edit tools on a feature's `state.json` and on the `phase-log.md` rendered beside it, naming the command to use. Bash is not filtered: this is a signpost for the model, like the rest of the gate |
 | new (UserPromptSubmit) | — | stamps the prompt time; handles `/dev-workflow:approve` |
 | `dashboard.py`, `mark_done.py` | parse and rewrite markdown | read the log rendered from `state.json`; Mark done approves every open section in the state, recorded as `via: "marked-done"` |
 
@@ -243,8 +243,9 @@ Stacked PRs, each mergeable alone and under 300 changed lines where possible.
 2. **CLI and shim.** `hooks/dw.py`, the shim in `status.py`, `dw import`.
 3. **Readers.** `state.log_text`; `status.py`, `dashboard.py` and `mark_done.py` switch
    to it. No behaviour change for legacy features.
-4. **Guards.** `dw check`; `evidence_guard.py` and the phase half of `plan_guard.py`
-   call it; `gate.py` protects the generated files.
+4. **Guards.** `evidence_guard.py` and `plan_guard.py` read the log through
+   `state.log_text`; `dw check` reports the same findings on demand; `gate.py` protects
+   the generated files.
 5. **Approval.** The `UserPromptSubmit` hook, `/dev-workflow:approve`, the relayed rule,
    `approval.mode` in the config readout.
 6. **Prompts.** `SKILL.md`, `coder.md`, templates and README move to the commands.

@@ -7,7 +7,9 @@ import re
 import sys
 
 import _workflow
+import evidence_guard
 import legacy
+import plan_guard
 import shim
 import state as workflow_state
 from state import Corrupt, Refused
@@ -185,6 +187,20 @@ def status(root, args):
     return "\n".join(lines)
 
 
+def check(root, args):
+    """What the Stop hooks would refuse the turn for, without waiting for them to."""
+    directory = active_dir(root)
+    log = workflow_state.log_text(directory) or ""
+    plan = _workflow.read(os.path.join(directory, "plan.md"))
+    findings = plan_guard.document_findings(root, plan, log)
+    waiting = evidence_guard.current_section(log)
+    if waiting and evidence_guard.unproven(waiting[1]):
+        findings.append("'%s' is reviewed but its evidence is empty." % waiting[0])
+    if not findings:
+        return "Nothing missing."
+    return "Missing:\n" + "\n".join("- " + finding for finding in findings)
+
+
 def import_legacy(root, args):
     directory = feature_dir(root, args.slug)
     log_path = os.path.join(directory, workflow_state.LOG_FILE)
@@ -232,6 +248,7 @@ def parser():
     command("approve", approve, (["phase"], {"nargs": "?"}), (["--said"], {}))
     command("reopen", reopen, phase)
     command("status", status, (["--json"], {"action": "store_true"}))
+    command("check", check)
     command("import", import_legacy, (["slug"], {}))
     return top
 
