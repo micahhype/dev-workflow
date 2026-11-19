@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **One fit-first architect replaces the angle panel.** `solution-architect` proposes the smallest
+  design that meets the acceptance criteria and covers the risks the change's surface actually has,
+  and returns priced deltas: what a leaner variant drops and loses, what a safer one adds and
+  covers. You pick the core plus or minus deltas. The complex tier runs two architects
+  independently. The simplicity-, performance- and risk-first angles are gone; a real load signal
+  goes in the brief.
+
 ## [0.24.0] - 2026-11-19
 
 ### Added

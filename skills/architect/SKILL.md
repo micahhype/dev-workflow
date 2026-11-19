@@ -26,10 +26,10 @@ when its Status line reads `accepted`.
    growth, availability target, team size, compliance. An NFR the user does not
    give stays `TBD` — never invent one.
 3. Pick catalog ids per the catalog's Rules. Only when the user asks for competing
-   options, spawn one `solution-architect` per angle in parallel — simplicity-first
-   always, performance-first or risk-first only on a signal for it — each given the
-   goal and the NFRs in place of acceptance criteria, plus a brief per the
-   catalog's briefing rule.
+   options, spawn two `solution-architect`s in parallel, with the same brief and no
+   word of each other — each given the goal and the NFRs in place of acceptance
+   criteria (a numeric load NFR is its load signal), plus a brief per the catalog's
+   briefing rule. Each returns one fit-first option with priced deltas.
 4. If no entry fits, say so and draft a new entry in the catalog's format.
    **CHECKPOINT: show the draft entry; wait for the user to approve it.** On
    approval, append it to `docs/architecture/catalog-additions.md` (create

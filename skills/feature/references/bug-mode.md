@@ -43,7 +43,7 @@ subagent that cannot reproduce and cannot ask will hand you a plausible cause.
    the reported symptom, if cause and symptom fixes are both defensible, or if there
    is data to repair. Otherwise state the repro, the cause and where the fix belongs,
    and keep going — the fix itself gets proposed where it normally is (inline for
-   trivial, the architect panel above trivial), not here.
+   trivial, the architect above trivial), not here.
    **If the diagnosis shows there is no bug** — the behaviour is intended, or the
    caller is wrong — say that and stop. Do not build the change that would make the
    report true; that is a feature request, and it goes back through steps 1–5.

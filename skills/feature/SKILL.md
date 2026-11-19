@@ -187,7 +187,7 @@ continue at Stage 0.8.
 
 ## Stage 0.8 — Size it: the machinery must be proportional to the change
 **The user pays for this workflow in wall-clock time and approval round-trips.** A
-20-line change that runs a research agent, an architect panel, three phases and five
+20-line change that runs a research agent, two architects, three phases and five
 checkpoints is not thoroughness — it is a workflow failure, and it is the failure
 this stage exists to prevent. Every stage you run must be one you could justify to
 someone waiting on a 20-line fix.
@@ -204,9 +204,9 @@ feel like real features and most of them are twenty lines.
 
 | Tier | It is this tier only if you can name one of these | What actually runs |
 |---|---|---|
-| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase**, coded by you (no `coder`) → `code-reviewer` (logic + security pass) → your approval. **No researcher, no panel, no plan-reviewer, no Stage 5.** |
-| **standard** | a new interface others will call (endpoint, command, screen, public function), OR new persistent state/schema, OR several files across one subsystem | survey, plus external research **only if there is a real external question** → simplicity-first architect (+ one signalled angle) → plan + `plan-reviewer` → phases → Stage 5 only if the plan ended up with more than one phase |
-| **complex** | crosses a subsystem or trust boundary, OR changes a data model other code depends on, OR the design itself is security-sensitive, OR wide blast radius | full machinery — simplicity-first + the signalled angles, full final audit |
+| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | codebase survey (map excerpts + read the files) → propose inline → **1 phase**, coded by you (no `coder`) → `code-reviewer` (logic + security pass) → your approval. **No researcher, no architect, no plan-reviewer, no Stage 5.** |
+| **standard** | a new interface others will call (endpoint, command, screen, public function), OR new persistent state/schema, OR several files across one subsystem | survey, plus external research **only if there is a real external question** → one fit-first architect → plan + `plan-reviewer` → phases → Stage 5 only if the plan ended up with more than one phase |
+| **complex** | crosses a subsystem or trust boundary, OR changes a data model other code depends on, OR the design itself is security-sensitive, OR wide blast radius | full machinery — two independent fit-first architects, full final audit |
 
 **For a bug, the root cause sets the tier, not the severity of the symptom** — see
 `bug-mode.md`.
@@ -217,7 +217,7 @@ one small diff, collapse it: drop the remaining phases into one, skip Stage 5, a
 tell the user you scaled it down and why. Downgrading needs no permission. Upgrading
 does: name the signal and tell the user before you spend their time on it.
 
-The tier scales research and option-panel depth — NOT security coverage:
+The tier scales research and the number of architects — NOT security coverage:
 `code-reviewer` runs every phase in every tier, security pass included. Nor does it scale the approval checkpoints: a cheaper tier means less
 machinery between the checkpoints, never fewer of them.
 
@@ -248,45 +248,49 @@ read the `project-map.md` entries for the area and the files they name, so a
 "trivial" change doesn't quietly duplicate an existing helper. Two minutes of
 Reads, not a subagent.
 
-## Stage 2 — Solution options (independent panel)
-1. Spawn a `solution-architect` panel IN PARALLEL. **Simplicity-first always
-   runs.** Add `performance-first` only when you can name a real load signal (a hot
-   path, a large data set, a latency budget), and `risk-first` only when the change
-   touches money, auth, a trust boundary or irreversible data. Standard tier with
-   no such signal is ONE architect; skip the panel for trivial. Give each a
-   DIFFERENT angle (simplicity-, performance-, risk-first) with the description + the acceptance criteria from
-   `spec.md` 1b (an option is only valid if it satisfies them) + research summary + the
-   existing-implementation survey and the building blocks / extension points from
-   the map — independent context reduces single-thread bias, but an architect
-   blind to what already exists designs a parallel copy of it. **Tell every
-   architect your diff estimate and that the option must be proportional to it**
-   — an angle is a lens, not a licence to grow the change. Left unanchored, a
-   performance-first architect will invent a cache for a fifteen-line fix, and the
-   synthesis then lands somewhere between "what was asked" and "what was invented".
+## Stage 2 — Solution option (fit-first)
+1. Spawn ONE `solution-architect`; skip it for trivial. Its brief is **fit-first**:
+   the smallest design that satisfies the acceptance criteria and covers the risks
+   this change's surface actually has. It returns one core option plus priced
+   **deltas** — what a leaner variant drops and loses, what a safer variant adds and
+   covers. **Complex tier: spawn TWO in parallel, with the same brief and no word of
+   each other** — a second independent design is worth its cost only where a wrong one
+   is expensive, and independent context is what reduces single-thread bias. Give the
+   architect the description + the acceptance criteria from `spec.md` 1b (an option is
+   only valid if it satisfies them) + research summary + the existing-implementation
+   survey and the building blocks / extension points from the map — an architect
+   blind to what already exists designs a parallel copy of it. **Tell it your diff
+   estimate and that the option must be proportional to it.** Name a load signal in
+   the brief only if there is a real one (a hot path, a large data set, a latency
+   budget); without one, performance is not a design goal, and an unanchored architect
+   will invent a cache for a fifteen-line fix.
    **Brief each architect on patterns per the briefing rule** in the `## Rules`
    header of `${CLAUDE_SKILL_DIR}/../../references/architecture-patterns.md`.
-2. Synthesize into `spec.md` section 3 as a comparison table (**size — files and
-   rough lines** / complexity / performance / security risk / effort). The size
-   column is the point: it makes an over-built option visible to the user at the
-   checkpoint instead of three phases later. Merge near-duplicates. Present the
-   options the panel ACTUALLY returned — one per architect, minus merges. Do NOT
-   invent an extra option to hit a count: a synthesized option you wrote yourself
-   carries the single-thread bias the panel exists to remove. If you think the
-   panel missed an angle, say so to the user and offer to spawn another architect
-   for it; don't quietly fill the gap. Check every catalog id an architect cites
-   that you did not expand against its full entry (Signals, Not when) before it
-   reaches the table. Each PROPOSED entry an architect returns gets its own yes/no
-   item at the checkpoint below, showing the full entry text; picking an option
-   never approves its PROPOSED entry. On yes, append the entry without the
+2. Write it into `spec.md` section 3: the core option (**size — files and rough
+   lines** / complexity / security risk / effort, and the risks it covers) and a
+   deltas table — delta / size / what it buys or loses. The sizes are the point: they
+   make an over-built choice visible to the user at the checkpoint instead of three
+   phases later. With two architects, put both cores side by side, merge what is
+   the same, and say where they disagree — the disagreement is the finding. Present
+   what the architects ACTUALLY returned. Do NOT add an option or a delta of your
+   own: one you wrote yourself carries the single-thread bias the second opinion
+   exists to remove. If you think something was missed, say so to the user and offer
+   to spawn another architect; don't quietly fill the gap. Check every catalog id an
+   architect cites that you did not expand against its full entry (Signals, Not
+   when) before it reaches the table. Each PROPOSED entry an architect returns gets
+   its own yes/no item at the checkpoint below, showing the full entry text; picking
+   an option never approves its PROPOSED entry. On yes, append the entry without the
    PROPOSED mark to the project's `docs/architecture/catalog-additions.md`
    (create `docs/architecture/` if missing).
-3. Give your recommendation first, but don't decide for the user. If the smallest
-   option satisfies the request, recommend it and say plainly what the larger ones
-   buy — "handles 100× the traffic we have" is a cost, not a feature. The
-   Simplicity contract in `conventions.md` binds this stage: no speculative
-   options, config, or abstraction for imagined future needs.
-4. **CHECKPOINT: use AskUserQuestion so the user picks. Stop and wait.** Record
-   the choice + rationale in `spec.md` sections 4–5.
+3. Give your recommendation first, but don't decide for the user: the core as
+   returned, plus or minus the deltas you would take, and why. A delta that covers a
+   risk nobody can point to in the code is a cost, not a feature — "handles 100× the
+   traffic we have" is the same. The Simplicity contract in `conventions.md` binds
+   this stage: no speculative options, config, or abstraction for imagined future
+   needs.
+4. **CHECKPOINT: use AskUserQuestion so the user picks — the core (which one, when
+   there are two) and, with `multiSelect`, the deltas to apply. Stop and wait.**
+   Record the choice + rationale in `spec.md` sections 4–5.
 
 ## Stage 3 — Plan
 1. Write nothing but the working docs until the plan is approved. Map the files to change; split the work into phases. Write `plan.md`, following

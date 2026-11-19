@@ -48,16 +48,22 @@ existing implementations (path:line), the building blocks to reuse, the extensio
 point this hooks into, and what would be DUPLICATED if built from scratch. "Nothing
 yet" is a valid answer — write it explicitly rather than leaving this blank.>
 
-## 3. Solution options considered
-| Option | Approach | Complexity | Performance | Security risk | Effort |
-|--------|----------|------------|-------------|---------------|--------|
-| A      |          |            |             |               |        |
-| B      |          |            |             |               |        |
-| C      |          |            |             |               |        |
+## 3. Solution option and its deltas
+<The core option as the architect returned it. Add a second column of rows (Core B)
+only when two architects ran, and say where they disagree.>
+
+| Core | Approach | Size (files, ~lines) | Risks covered | Complexity | Effort |
+|------|----------|----------------------|---------------|------------|--------|
+| A    |          |                      |               |            |        |
+
+| Delta | Size | What it buys or loses |
+|-------|------|-----------------------|
+| Leaner: drop <X> | saves ~N lines | loses <what stops being covered> |
+| Safer: add <Z>   | costs ~N lines | covers <W> |
 
 ## 4. Chosen solution + rationale
-<Which option, and WHY it was chosen over the others. Note the tradeoffs
-accepted.>
+<The core (which one, when there were two) and the deltas the user took or turned
+down, and WHY. Note the tradeoffs accepted.>
 
 ## 5. Non-goals / out of scope
 <Explicitly what we are NOT doing in this feature.>
