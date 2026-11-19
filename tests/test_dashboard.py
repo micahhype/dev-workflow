@@ -314,3 +314,24 @@ def test_serve_returns_once_idle(tmp_path, monkeypatch):
         thread.start()
         thread.join(timeout=5)
         assert not thread.is_alive()
+
+
+def test_a_feature_with_state_is_shown_from_the_state_and_a_broken_one_as_a_warning(tmp_path):
+    import state as workflow_state
+    features = tmp_path / ".dev-workflow" / "features"
+    feature = workflow_state.new_state("orders", "Paginate orders")
+    workflow_state.set_phases(feature, ["query"])
+    workflow_state.create(str(features / "orders"), feature)
+    (features / "orders" / "phase-log.md").write_text("# Phase log: hand edited\n")
+    (features / "broken").mkdir()
+    (features / "broken" / "state.json").write_text("{not json")
+    (tmp_path / ".dev-workflow" / "active").write_text("orders\n")
+
+    board = dashboard.collect(str(tmp_path))
+    assert board["title"] == "Paginate orders"
+    assert [card["title"] for card in board["phases"]] == ["Phase 1 — query"]
+    assert [row["slug"] for row in board["features"]] == ["broken", "orders"]
+
+    broken = dashboard.collect(str(tmp_path), "broken")
+    assert broken["phases"] == []
+    assert "state.json is unreadable" in broken["warnings"][0]

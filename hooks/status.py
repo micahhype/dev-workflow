@@ -14,6 +14,7 @@ import sys
 import tempfile
 
 import shim
+import state as workflow_state
 from _workflow import STATE_DIR, docs_dir, iter_phases, read
 
 # Ensure UTF-8 output regardless of the host locale (Windows pipes default to
@@ -104,7 +105,12 @@ def main():
     register(root)
     shim.write(root)
     ddir, slug = docs_dir(root)
-    log = read(os.path.join(ddir, "phase-log.md"))
+    try:
+        log = workflow_state.log_text(ddir)
+    except workflow_state.Corrupt as problem:
+        print("[dev-workflow] %s — the workflow hooks cannot see this feature until it is "
+              "fixed." % problem)
+        sys.exit(0)
     if not log:
         sys.exit(0)  # no active workflow -> stay silent
 

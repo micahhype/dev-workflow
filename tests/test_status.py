@@ -74,3 +74,27 @@ def test_an_unusable_home_leaves_the_readout_unchanged(tmp_path):
     assert broken.returncode == 0
     assert broken.stdout == usual.stdout and "Wallet topup" in broken.stdout
     assert broken.stderr == ""
+
+
+def state_feature(root, text):
+    directory = root / ".dev-workflow" / "features" / "orders"
+    directory.mkdir(parents=True)
+    (directory / "state.json").write_text(text)
+    (root / ".dev-workflow" / "active").write_text("orders\n")
+    return directory
+
+
+def test_a_feature_with_state_is_reported_from_the_state(tmp_path):
+    import state as workflow_state
+    feature = workflow_state.new_state("orders", "Paginate orders")
+    workflow_state.set_phases(feature, ["query", "wiring"])
+    state_feature(tmp_path, __import__("json").dumps(feature))
+    out = run_hook("status.py", {"source": "startup"}, project_dir=tmp_path).stdout
+    assert "Paginate orders" in out
+    assert "0/3 approved; current -> Phase 1 — query" in out
+
+
+def test_an_unreadable_state_is_named_instead_of_silently_ignored(tmp_path):
+    state_feature(tmp_path, "{not json")
+    out = run_hook("status.py", {"source": "startup"}, project_dir=tmp_path).stdout
+    assert "state.json is unreadable" in out

@@ -172,3 +172,27 @@ def test_the_rendered_log_reads_the_same_through_the_legacy_parser():
     assert plan_guard.review_map_findings(workflow_state.render(state)) == []
     assert _workflow.field_text(parsed[2][1], "Lessons").strip() == "none"
     assert "Post-ship reviewed" not in parsed[2][1]
+
+
+def test_readers_get_the_log_from_the_state_not_from_a_stale_file(tmp_path):
+    directory = tmp_path / ".dev-workflow" / "features" / "orders"
+    state = feature()
+    workflow_state.create(str(directory), state)
+    (directory / "phase-log.md").write_text("# Phase log: hand edited\n")
+    assert workflow_state.log_text(str(directory)) == workflow_state.render(state)
+
+
+def test_a_state_json_at_the_project_root_is_not_a_workflow_state(tmp_path):
+    (tmp_path / "state.json").write_text('{"app": "something else"}')
+    (tmp_path / "phase-log.md").write_text("# Phase log: legacy\n")
+    assert workflow_state.log_text(str(tmp_path)) == "# Phase log: legacy\n"
+    assert workflow_state.log_text(str(tmp_path / "missing")) is None
+
+
+def test_marking_done_approves_every_open_section_and_says_how():
+    state = feature("one", "two")
+    finish(state, 1)
+    assert workflow_state.force_approve(state) == ["Phase 2 — two", "Final review (all phases)"]
+    assert state["phases"][0]["approval"]["via"] == "user"
+    assert state["phases"][1]["approval"]["via"] == "marked-done"
+    assert state["final_review"]["status"] == "approved"

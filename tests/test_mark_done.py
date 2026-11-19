@@ -101,3 +101,23 @@ def test_an_already_done_feature_is_left_alone(tmp_path):
     assert proc.returncode == 0
     assert "No open sections in topup" in proc.stdout
     assert log_path.read_bytes() == before
+
+
+def test_a_feature_with_state_is_closed_in_the_state_and_its_log_rerendered(tmp_path):
+    import json
+    import state as workflow_state
+    directory = tmp_path / ".dev-workflow" / "features" / "topup"
+    feature = workflow_state.new_state("topup", "Wallet topup")
+    workflow_state.set_phases(feature, ["ledger"])
+    workflow_state.create(str(directory), feature)
+
+    proc = run(tmp_path, "topup")
+    assert proc.stdout.strip() == "ticked: Phase 1 — ledger"
+    saved = json.loads((directory / "state.json").read_text())
+    assert saved["phases"][0]["approval"]["via"] == "marked-done"
+    assert saved["events"][-1]["do"] == "mark-done"
+    assert "[x] USER APPROVED" in (directory / "phase-log.md").read_text()
+
+    before = (directory / "state.json").read_text()
+    assert "Nothing written" in run(tmp_path, "topup").stdout
+    assert (directory / "state.json").read_text() == before

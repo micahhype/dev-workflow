@@ -31,6 +31,7 @@ import diff_budget
 import evidence_guard
 import mark_done
 import plan_guard
+import state as workflow_state
 import status
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -92,7 +93,7 @@ def collect(root, requested_slug=None):
         slug = active_slug
         feature_dir = active_dir
 
-    log = read_doc(feature_dir, "phase-log.md")
+    log, unreadable = feature_log(feature_dir)
     spec = read_doc(feature_dir, "spec.md")
     plan = read_doc(feature_dir, "plan.md")
     checkpoints = guarded(recent_checkpoints, root)
@@ -104,7 +105,7 @@ def collect(root, requested_slug=None):
         "phases": guarded(phase_cards, log, plan, root, slug),
         "spec": spec,
         "plan": plan,
-        "warnings": guarded(guard_warnings, log, plan, root),
+        "warnings": guarded(all_warnings, unreadable, log, plan, root),
         "gate": guarded(gate_state, root),
         "checkpoints": checkpoints,
         "config": guarded(config.show, root),
@@ -117,6 +118,14 @@ def guarded(build, *args):
         return build(*args)
     except Exception as exc:
         return {"error": str(exc) or type(exc).__name__}
+
+
+def feature_log(feature_dir):
+    """-> (log text, warnings). A state.json that cannot be read shows as a warning."""
+    try:
+        return workflow_state.log_text(feature_dir) or "", []
+    except workflow_state.Corrupt as problem:
+        return "", [str(problem)]
 
 
 def read_doc(feature_dir, name):
@@ -134,7 +143,7 @@ def list_features(root, active_slug):
 
 
 def feature_summary(feature_dir, slug, active_slug):
-    log = read_doc(feature_dir, "phase-log.md")
+    log, _unreadable = feature_log(feature_dir)
     sections = list(_workflow.iter_phases(log))
     approved = [title for title, _body, is_approved in sections if is_approved]
     current_title, current_body = first_unapproved(sections) or (None, "")
@@ -274,6 +283,10 @@ def diff_size(title, plan, root, slug):
 def field(body, name):
     text = _workflow.field_text(body, name)
     return textwrap.dedent(text).strip() if text is not None else None
+
+
+def all_warnings(unreadable, log, plan, root):
+    return unreadable + guard_warnings(log, plan, root)
 
 
 def guard_warnings(log, plan, root):

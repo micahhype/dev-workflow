@@ -12,6 +12,7 @@ import sys
 import tempfile
 
 import _workflow
+import state as workflow_state
 
 UNTICKED = "[ ] USER APPROVED"
 TICKED = "[x] USER APPROVED"
@@ -43,6 +44,8 @@ def apply(root, slug, today):
     if os.path.islink(path) or os.path.realpath(os.path.dirname(path)) != expected_dir:
         raise Refused("%s or its phase-log.md is a symlink, so the write could land "
                       "outside this project." % slug)
+    if workflow_state.load(expected_dir) is not None:
+        return close_state(expected_dir, slug)
     if not os.path.isfile(path):
         raise Refused("%s has no phase-log.md." % slug)
     new_log, report = mark_done(root, slug, today)
@@ -51,6 +54,16 @@ def apply(root, slug, today):
     if new_log != read_log(path):
         write_atomically(path, new_log)
     return report
+
+
+def close_state(feature_dir, slug):
+    state = workflow_state.load(feature_dir)
+    if all(phase["status"] == "approved" for phase in workflow_state.sections(state)):
+        return ["No open sections in %s. Nothing written." % slug]
+    closed = []
+    workflow_state.update(feature_dir, lambda state: closed.extend(workflow_state.force_approve(state)),
+                          {"by": "user", "do": "mark-done", "phase": None})
+    return [REPORT_LINES["ticked"] % title for title in closed]
 
 
 def mark_done(root, slug, today):

@@ -97,7 +97,7 @@ write.
   otherwise. This replaces "delete the Final review section when Stage 5 is skipped".
 - `project_map`, `lessons` and `post_ship_reviewed` sit on the feature, so they no
   longer move between the last phase and the final review.
-- `approval` is `{"at": ..., "via": "user" | "relayed", "quote": ...}`.
+- `approval` is `{"at": ..., "via": "user" | "relayed" | "marked-done", "quote": ...}`.
 - `events` is append-only. It gives the time spent per phase and per round without
   anyone reporting it.
 
@@ -186,7 +186,7 @@ workaround, where today it takes ticking the box the prompt describes.
 | `plan_guard.py` (Stop) | parses `plan.md` and `phase-log.md` | keeps the `plan.md` checks; phase checks come from `dw check` |
 | `gate.py` (PreToolUse) | guards `.approval-gate` | also denies Edit and Write on `state.json` and on a generated `phase-log.md`, naming the command to use |
 | new (UserPromptSubmit) | — | stamps the prompt time; handles `/dev-workflow:approve` |
-| `dashboard.py`, `mark_done.py` | parse and rewrite markdown | read `state.json`; Mark done calls the approve path |
+| `dashboard.py`, `mark_done.py` | parse and rewrite markdown | read the log rendered from `state.json`; Mark done approves every open section in the state, recorded as `via: "marked-done"` |
 
 The Stop hooks keep their bound of three refusals. Most of what they catch today
 becomes a precondition, so they are left with one job: a turn that ends while the
@@ -206,17 +206,21 @@ message naming the file. Silence is reserved for projects with no active feature
 
 ## Legacy features
 
-A feature directory without `state.json` is legacy. One function,
-`load_feature(dir)`, returns the same structure for both kinds: from `state.json` when
-it exists, otherwise from the current parser, which moves to `hooks/legacy.py`
-unchanged and read-only.
+A feature directory without `state.json` is legacy. Readers get a feature's log from one
+function, `state.log_text(dir)`: rendered from `state.json` when the feature has one,
+otherwise the hand-written `phase-log.md`. The status hook, the dashboard and the guards
+keep their current parser and read that text, so a legacy feature behaves exactly as
+before and a stale or hand-edited rendered log cannot mislead them. `hooks/legacy.py`
+converts a hand-written log into the state structure for `dw import`.
+
+A `state.json` counts only inside `.dev-workflow/features/<slug>/`. The old layout keeps
+its docs at the project root, where a `state.json` may belong to the project itself.
 
 - Finished legacy features are never converted. The dashboard shows them as before.
 - A legacy feature in flight keeps the old rules until `dw import <slug>` converts it.
   The import keeps the fields the state knows; the hand-written log is preserved next to
   it as `phase-log.legacy.md`, so free-form notes are not lost.
 - New features always get `state.json`.
-- `legacy.py` is deleted once no project has an unfinished legacy feature.
 
 ## Risks
 
@@ -237,8 +241,8 @@ Stacked PRs, each mergeable alone and under 300 changed lines where possible.
 1. **State library.** `hooks/state.py`: schema, load, validated transitions, lock and
    atomic write, renderer. Tests only; nothing uses it yet.
 2. **CLI and shim.** `hooks/dw.py`, the shim in `status.py`, `dw import`.
-3. **Readers.** `load_feature` and `legacy.py`; `status.py`, `dashboard.py` and
-   `mark_done.py` switch to it. No behaviour change for legacy features.
+3. **Readers.** `state.log_text`; `status.py`, `dashboard.py` and `mark_done.py` switch
+   to it. No behaviour change for legacy features.
 4. **Guards.** `dw check`; `evidence_guard.py` and the phase half of `plan_guard.py`
    call it; `gate.py` protects the generated files.
 5. **Approval.** The `UserPromptSubmit` hook, `/dev-workflow:approve`, the relayed rule,

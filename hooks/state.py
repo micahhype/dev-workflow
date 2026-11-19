@@ -172,6 +172,22 @@ def reopen(state, target):
     phase["status"] = working_status(phase)
 
 
+def force_approve(state):
+    """Close a feature the user already finished: approve every open section, whatever
+    its status. -> the titles approved."""
+    closed = []
+    for phase in sections(state):
+        if phase["status"] != "approved":
+            phase["approval"] = {"at": now(), "via": "marked-done", "quote": None}
+            phase["status"] = "approved"
+            closed.append(heading(phase))
+    return closed
+
+
+def heading(phase):
+    return phase["title"] if is_final(phase) else "Phase %s — %s" % (phase["id"], phase["title"])
+
+
 def set_phase_text(phase, field, text):
     if field not in PHASE_TEXT:
         raise Refused("Not a phase field: %s. Fields: %s." % (field, ", ".join(PHASE_TEXT)))
@@ -223,6 +239,25 @@ def load(feature_dir):
         raise Corrupt("%s is version %r; this plugin reads version %d."
                       % (path, state.get("version"), VERSION))
     return state
+
+
+def log_text(feature_dir):
+    """What readers parse: rendered from state.json when the feature has one, so a stale
+    or hand-edited phase-log.md cannot mislead them; otherwise the hand-written log."""
+    state = load(feature_dir) if in_features_dir(feature_dir) else None
+    if state is not None:
+        return render(state)
+    try:
+        with open(os.path.join(feature_dir, LOG_FILE), "r", encoding="utf-8") as source:
+            return source.read()
+    except OSError:
+        return None
+
+
+def in_features_dir(path):
+    """False for the legacy layout, whose docs sit at the project root beside any
+    unrelated state.json the project may own."""
+    return os.path.basename(os.path.dirname(os.path.abspath(path))) == "features"
 
 
 def create(feature_dir, state):
@@ -289,7 +324,7 @@ def render_phase(phase):
              ("code-reviewed", phase["status"] in ("reviewed", "approved")),
              ("security-scanned", phase["security_scanned"]),
              ("USER APPROVED", phase["status"] == "approved")]
-    return (["## Phase %s — %s" % (phase["id"], phase["title"]), status_line(ticks),
+    return (["## " + heading(phase), status_line(ticks),
              field_line("Changed", phase["changed"]),
              field_line("Review map", phase["review_summary"])]
             + ["  - %s %s" % (entry["tier"], entry["text"]) for entry in phase["review_map"]]
@@ -302,7 +337,7 @@ def render_final(phase):
     ticks = [("full code review", phase["status"] in ("reviewed", "approved")),
              ("security-audit", phase["security_scanned"]),
              ("USER APPROVED", phase["status"] == "approved")]
-    return (["## %s" % phase["title"], status_line(ticks),
+    return (["## " + heading(phase), status_line(ticks),
              field_line("Cross-phase findings", phase["review_result"])]
             + shared_lines(phase))
 
