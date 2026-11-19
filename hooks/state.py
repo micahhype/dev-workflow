@@ -64,6 +64,9 @@ def section(state, target):
             return candidate
     if target == FINAL:
         raise Refused("A single-phase feature has no final review.")
+    if not state["phases"]:
+        raise Refused('This feature has no phases yet. Record the plan\'s first: '
+                      'dw phases "<title>" ["<title>" ...]')
     raise Refused("No phase %s in this feature." % target)
 
 

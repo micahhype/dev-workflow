@@ -32,6 +32,10 @@ def feature_dir(root, slug):
     return os.path.join(root, _workflow.STATE_DIR, "features", slug)
 
 
+def chosen_dir(root, args):
+    return feature_dir(root, args.feature) if args.feature else active_dir(root)
+
+
 def active_dir(root):
     directory, slug = _workflow.docs_dir(root)
     if slug is None:
@@ -60,7 +64,7 @@ def given_text(args):
 
 def change(root, args, edit):
     event = {"by": args.by, "do": args.command, "phase": event_phase(args)}
-    return workflow_state.update(active_dir(root), edit, event)
+    return workflow_state.update(chosen_dir(root, args), edit, event)
 
 
 def event_phase(args):
@@ -156,7 +160,7 @@ def approve(root, args):
     args.by = "orchestrator" if args.said else "user"
 
     if not args.phase:
-        args.phase = str(current(loaded(root))["id"])
+        args.phase = str(current(loaded(root, args))["id"])
     change(root, args, lambda state: workflow_state.approve(state, target_of(args.phase), approval))
     return "%s approved (via %s)." % (named(args.phase), approval["via"])
 
@@ -173,15 +177,15 @@ def reopen(root, args):
     return "%s reopened." % named(args.phase)
 
 
-def loaded(root):
-    state = workflow_state.load(active_dir(root))
+def loaded(root, args):
+    state = workflow_state.load(chosen_dir(root, args))
     if state is None:
-        raise Refused("The active feature has no state.json. Convert it with: dw import <slug>")
+        raise Refused("This feature has no state.json. Convert it with: dw import <slug>")
     return state
 
 
 def status(root, args):
-    state = loaded(root)
+    state = loaded(root, args)
     if args.json:
         return json.dumps(state, indent=2)
     lines = ["%s (%s)" % (state["title"], state["slug"])]
@@ -196,7 +200,7 @@ def status(root, args):
 
 def check(root, args):
     """What the Stop hooks would refuse the turn for, without waiting for them to."""
-    directory = active_dir(root)
+    directory = chosen_dir(root, args)
     log = workflow_state.log_text(directory) or ""
     plan = _workflow.read(os.path.join(directory, "plan.md"))
     findings = plan_guard.document_findings(root, plan, log)
@@ -233,6 +237,7 @@ def import_legacy(root, args):
 def parser():
     top = argparse.ArgumentParser(prog="dw", description=__doc__)
     top.add_argument("--by", choices=ACTORS, default="orchestrator", help="who is acting")
+    top.add_argument("--feature", help="a feature other than the active one, by slug")
     commands = top.add_subparsers(dest="command", required=True)
 
     def command(name, handler, *arguments, text=False):

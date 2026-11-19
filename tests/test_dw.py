@@ -213,3 +213,33 @@ def test_session_start_writes_a_launcher_that_works_from_a_subdirectory(tmp_path
     out = subprocess.run([str(tmp_path / ".dev-workflow" / "dw"), "status"], cwd=tmp_path / "src",
                          env=env, text=True, stdout=subprocess.PIPE).stdout
     assert "Phase 1 — only" in out
+
+
+def test_a_two_phase_feature_runs_through_its_final_review_and_closing_lines(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    assert "no phases yet" in dw(tmp_path, "coded", "1", "--changed", "a.py", stdin=EVIDENCE).stderr
+    dw(tmp_path, "phases", "query", "wiring")
+    for number in ("1", "2"):
+        dw(tmp_path, "--by", "coder", "coded", number, "--changed", "a.py", stdin=EVIDENCE)
+        dw(tmp_path, "reviewed", number, "--security", stdin=REVIEW_MAP)
+        assert dw(tmp_path, "approve", number, env=OUTSIDE_CLAUDE).returncode == 0
+
+    dw(tmp_path, "round", "final")
+    dw(tmp_path, "set", "final", "evidence", stdin="`pytest -q` -> 40 passed, end to end")
+    assert dw(tmp_path, "reviewed", "final", "--security", stdin="").returncode == 0
+    assert dw(tmp_path, "approve", "final", env=OUTSIDE_CLAUDE).returncode == 0
+    assert "Lessons" in dw(tmp_path, "check").stdout
+
+    dw(tmp_path, "set", "feature", "lessons", stdin="none")
+    assert dw(tmp_path, "check").stdout.strip() == "Nothing missing."
+    state = saved(tmp_path)
+    assert state["final_review"]["status"] == "approved" and state["final_review"]["rounds"] == 1
+
+
+def test_another_feature_is_addressed_by_slug(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    dw(tmp_path, "new", "refunds", "Refund flow")
+    dw(tmp_path, "--feature", "orders", "set", "feature", "post_ship_reviewed",
+       stdin="2026-11-19 — no user edits")
+    assert saved(tmp_path)["post_ship_reviewed"] == "2026-11-19 — no user edits"
+    assert saved(tmp_path, "refunds")["post_ship_reviewed"] is None

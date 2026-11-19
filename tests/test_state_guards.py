@@ -95,3 +95,9 @@ def test_the_gate_refuses_edits_to_the_prompt_stamp(tmp_path):
     reviewed_feature(tmp_path)
     stamp = tmp_path / ".dev-workflow" / "user-prompt.json"
     assert denied(run_hook("gate.py", edit(stamp), project_dir=tmp_path))
+
+
+def test_the_gate_refuses_edits_to_the_launcher(tmp_path):
+    reviewed_feature(tmp_path)
+    launcher = tmp_path / ".dev-workflow" / "dw"
+    assert denied(run_hook("gate.py", edit(launcher), project_dir=tmp_path))

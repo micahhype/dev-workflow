@@ -50,6 +50,7 @@ STATE_DIR = ".dev-workflow"
 GATE_NAME = ".approval-gate"
 
 PROMPT_STAMP = "user-prompt.json"
+LAUNCHER = "dw"
 STATE_NAME = "state.json"
 LOG_NAME = "phase-log.md"
 GENERATED_MSG = (
@@ -132,9 +133,10 @@ def bash_touches_gate(command):
 
 
 def is_generated(fp):
-    """A feature's state.json, the phase-log.md rendered beside one, or the prompt stamp."""
+    """A feature's state.json, the phase-log.md rendered beside one, the prompt stamp or
+    the dw launcher."""
     directory = os.path.dirname(os.path.abspath(fp))
-    if os.path.basename(fp) == PROMPT_STAMP and os.path.basename(directory) == STATE_DIR:
+    if os.path.basename(fp) in (PROMPT_STAMP, LAUNCHER) and os.path.basename(directory) == STATE_DIR:
         return True
     if os.path.basename(os.path.dirname(directory)) != "features":
         return False

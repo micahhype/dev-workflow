@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Workflow state in `state.json`.** A feature's progress is a `state.json` per feature;
+  `phase-log.md` is rendered from it. Every change goes through `.dev-workflow/dw`, which
+  validates the step and refuses with the reason. See `docs/architecture/workflow-state.md`.
+- **`/dev-workflow:approve`.** Typing it records a direct approval through a hook. An approval
+  relayed by Claude is refused unless you have sent a message since the phase was reviewed.
+  `approval.mode` (`relayed` by default, or `direct`) is in `/dev-workflow:config`.
+- **`dw check`** lists what the Stop hooks would refuse the turn for; `dw import <slug>` converts
+  a feature started on an older version.
+
+### Changed
+- **The feature skill and `coder` record progress with `dw`** instead of editing `phase-log.md`.
+  The edit tools are refused on `state.json`, the rendered log, the prompt stamp and the launcher.
+- **The Stop hooks, the status hook and the dashboard read the state.** An unreadable `state.json`
+  is named in a message instead of silencing them. Features without `state.json` behave as before.
+- **Mark done** on a feature with state approves it in the state, recorded as `marked-done`.
+- SessionStart writes a `.dev-workflow/dw` launcher into projects that use the workflow.
+
 ## [0.23.0] - 2026-11-18
 
 ### Added

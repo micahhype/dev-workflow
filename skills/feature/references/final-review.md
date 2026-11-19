@@ -12,13 +12,15 @@ Read by `/dev-workflow:feature` once every phase of a feature with MORE than one
      vulnerabilities (auth flows spanning phases, data-flow and trust-boundary
      analysis). Do NOT re-review single phases from scratch; each already had its
      security pass.
-2. Summarize findings; update `phase-log.md` final section and its `- Evidence:`
-   line with feature-level proof (test-suite result, validation output, key
-   end-to-end invariants checked), plus `- Review rounds:` and `- Unresolved:`.
-3. If issues found, fix via `coder` and re-audit — **same 2-round budget, same
-   escalation.** An unresolved security finding is never waved through on a round
+2. Summarize findings and record them on phase `final`: `dw set final review_result`,
+   and `dw set final evidence` with feature-level proof (test-suite result, validation
+   output, key end-to-end invariants checked). When the findings are resolved, run
+   `dw reviewed final --security`.
+3. If issues found, run `dw round final`, fix via `coder` and re-audit — **same 2-round
+   budget, same escalation** (`dw set final unresolved` records the user's call). An unresolved security finding is never waved through on a round
    count: it goes to the user with your recommendation, explicitly.
-4. **Update `project-map.md`** as the feature skill's Stage 5 says.
+4. **Update `project-map.md`** as the feature skill's Stage 5 says, and record what you
+   did with `dw set feature project_map`.
 5. **CHECKPOINT: present the final result, the `project-map.md` update AND the
    Stage 6 lesson proposals, then stop for sign-off.** The map is what future
    agents will treat as fact, so the user gets to correct it here.

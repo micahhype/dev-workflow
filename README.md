@@ -35,6 +35,7 @@ The domain isn't hardcoded — it's read from your `conventions.md` (via `/dev-w
 /dev-workflow:init                       # (optional) learn the repo → conventions.md + project-map.md
 /dev-workflow:feature add pagination to the orders endpoint
 /dev-workflow:feature --bug the orders endpoint 500s on an empty cart
+/dev-workflow:approve                    # approve the phase that is waiting for you
 /dev-workflow:status                     # where am I?  (also auto-injected each session)
 ```
 
@@ -49,6 +50,7 @@ Working docs scaffold automatically under `.dev-workflow/features/<slug>/`; mult
 | `/dev-workflow:init` | Inspect the project, draft `conventions.md` + `project-map.md`, import conventions from `CLAUDE.md` |
 | `/dev-workflow:architect` | System design before `/dev-workflow:feature`: numeric NFRs, patterns picked from the plugin's [pattern catalog](references/architecture-patterns.md), diagram, PR slices → `docs/architecture/<name>.md`. `adr <title>` records a decision in `docs/adr/` |
 | `/dev-workflow:feature` | Drive the whole feature workflow (orchestrator). `--bug` swaps the front end for reproduce → root cause → regression |
+| `/dev-workflow:approve` | Approve the phase waiting for you (optionally a phase number or `final`). Typing it is what records the approval |
 | `/dev-workflow:status` | Readout of the active feature / phase / gate |
 | `/dev-workflow:config` | Effective settings, where each came from, and which config lines are silently doing nothing |
 | `/dev-workflow:dashboard` | Local web board (127.0.0.1) of all projects: each feature's progress, the ones waiting for your approval first; phases, evidence, plan, spec, checkpoints and config on click; refreshes itself. Its only write: a guarded Mark done button |
@@ -81,7 +83,7 @@ Defaults are **aliases**, so each agent runs the newest model of its family with
 
 ## Safety & reliability
 
-Five hooks make the workflow *trustworthy*, not just well-behaved. All fail open — a hook that errors never blocks your work.
+Six hooks make the workflow *trustworthy*, not just well-behaved. All fail open — a hook that errors never blocks your work.
 
 | | Gives you |
 |---|---|
@@ -90,8 +92,9 @@ Five hooks make the workflow *trustworthy*, not just well-behaved. All fail open
 | 🧾 **Evidence gate** | "Done" must cite proof — an empty ledger is refused |
 | 📏 **Plan guard** | Extra phases and blown review budgets must be justified in writing, not chosen silently |
 | ♻️ **Context re-injection** | Workflow state survives `/compact` |
+| 🗂️ **Workflow state** | Progress lives in `state.json`, changed by one command that validates each step; your approval records how it arrived |
 
-Four of the five stay silent when no workflow is active. **Checkpoints are the exception**: in any git repo, the checkpoint hook snapshots before every `Edit`/`Write`/`MultiEdit`/`NotebookEdit`/`Bash` whether or not a dev-workflow feature is running. It writes only to its own shadow refs — never your index, HEAD, branch, or worktree — but it is not side-effect-free. Checkpoints older than 14 days are deleted as new ones are taken (see the limits below).
+Five of the six stay silent when no workflow is active. **Checkpoints are the exception**: in any git repo, the checkpoint hook snapshots before every `Edit`/`Write`/`MultiEdit`/`NotebookEdit`/`Bash` whether or not a dev-workflow feature is running. It writes only to its own shadow refs — never your index, HEAD, branch, or worktree — but it is not side-effect-free. Checkpoints older than 14 days are deleted as new ones are taken (see the limits below).
 
 <details>
 <summary><b>🔒 Approval gate</b> — how it works</summary>
@@ -156,6 +159,36 @@ A `Stop` hook (`hooks/plan_guard.py`) refuses to end a turn when:
 **What it can and cannot check.** No hook can judge whether four phases were warranted; that is a design opinion, and one that tried would block good plans. It checks that the justification EXISTS — "because it is a separate step" passes the hook. What it removes is the silent case, which nobody can review. You are still the one who reads the reason at the plan checkpoint and says "no, merge them".
 
 Silent until a phase has a real `- Scope:` (the scaffolded plan is not a plan), and bounded like the evidence gate: it gives up loudly after 3 refusals rather than trap a turn.
+</details>
+
+<details>
+<summary><b>🗂️ Workflow state & approval</b> — how it works</summary>
+
+<br>Each feature's progress is a `state.json` in `.dev-workflow/features/<slug>/`. `phase-log.md` is rendered from it after every change, in the same layout as before, so you read it as you always did.
+
+Every change goes through one command, `.dev-workflow/dw` (a launcher the plugin writes into the project):
+
+```
+dw coded 1 --changed "src/orders/list.ts"     evidence on stdin
+dw round 1                                     a fix round starts
+dw reviewed 1 --security                       review map on stdin
+dw set 1 unresolved                            text on stdin
+dw approve                                     yours: run it in your own shell
+dw status · dw check
+```
+
+The command validates the step and refuses with the reason: a phase cannot be reviewed before it is coded, approved without evidence and a review map, or started before the previous one is approved. Review rounds are counted by `dw round`, not self-reported. The edit tools are refused on `state.json` and on the rendered log, with a message naming the command.
+
+**Approval** arrives one of two ways, and the state records which:
+
+- **Direct** — you type `/dev-workflow:approve`, run `! .dev-workflow/dw approve`, or press Mark done on the dashboard. A hook records the typed command; Claude calling the command does not reach that hook.
+- **Relayed** — you approve in plain words and Claude records it with your words quoted. It is refused unless you have sent a message since the phase was reviewed, so a phase cannot be approved in the turn that reviewed it.
+
+`/dev-workflow:config set approval.mode direct` accepts direct approvals only. That is the strict setting: Claude Code raises the same prompt event for turns it starts itself (a background agent reporting back), and the hook can only skip the ones it recognises.
+
+**What it can and cannot do.** This is a guard, not a security boundary: Claude has a shell and can write any file you can. What it removes is the easy path, where approving meant ticking a box.
+
+**Features started on an older version** have no `state.json` and keep working as before. `dw import <slug>` converts one that is in flight and keeps its hand-written log as `phase-log.legacy.md`. The launcher is a `sh` script, so on Windows call `python3 <plugin>/hooks/dw.py` instead.
 </details>
 
 <details>
@@ -238,7 +271,7 @@ It never restates a default: `hooks/config.py` imports the guards and reads thei
 
 ## Under the hood
 
-- **Files are the source of truth** — `spec.md` / `plan.md` / `phase-log.md` survive `/compact` and `/clear`. Re-read them, don't trust conversation memory.
+- **Files are the source of truth** — `spec.md` / `plan.md` / `state.json` (and the `phase-log.md` rendered from it) survive `/compact` and `/clear`. Re-read them, don't trust conversation memory.
 - **You review AFTER the AI** reviewers at every phase; nothing advances unapproved.
 - **Proportional machinery** — the `feature` skill estimates the diff first, then sizes the job (trivial / standard / complex) and scales the machinery to it: trivial skips research and the option panel and runs as **one** phase; the option panel always runs a simplicity-first architect and adds performance- or risk-first only on a named signal; complex adds a full final audit. **A feature is trivial by default** — moving up a tier means naming the signal that puts it there — and the tier is re-checked once the plan makes the real size visible, so a change that turned out small gets collapsed instead of running the plan it was guessed to need. Phase counts start at one and every extra phase has to earn itself, because each one costs you an implement-review-approve round-trip. **The tier never scales security coverage down**: `code-reviewer` runs on every phase in every tier, security pass included. Trivial phases are coded by the orchestrator itself, with no `coder` spawn, and still reviewed by a freshly spawned `code-reviewer`.
 - **Token discipline across phases** — the fresh-context re-reads that make multi-phase workflows expensive are attacked directly: **one `coder` is reused across a feature's phases** (continued, not respawned) so codebase intake is paid once, not per phase; the orchestrator hands coder and reviewers the **exact files/paths** from `plan.md` so they Read the spot instead of Grep-walking to find it; and `conventions.md` is kept lean because every subagent re-reads it in full. Reviewers stay freshly spawned per phase on purpose — objective fresh eyes are the point. (An MCP can *store* shared context but can't avoid this cost: each subagent still pulls it into its own window.)

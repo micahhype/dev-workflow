@@ -482,7 +482,8 @@ USAGE = ("usage: config.py show\n"
          "       comment-guard.density.min_ratio | comment-guard.max_block |\n"
          "       test-guard.enabled |\n"
          "       test-guard.checks.fakes | test-guard.checks.assertions |\n"
-         "       test-guard.max_empty_args | plan-guard.pr_cap | models.<agent>\n"
+         "       test-guard.max_empty_args | plan-guard.pr_cap | approval.mode |\n"
+         "       models.<agent>\n"
          "value: on | off | a number | a model alias | default")
 
 

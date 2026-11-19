@@ -1,5 +1,8 @@
 # Phase log: <feature name>
 
+> This is the layout `dw` renders from `state.json`; new features never edit it by
+> hand. The notes below describe a hand-written log from an older version.
+>
 > Append-only record of each phase. Survives /compact and /clear — re-read this
 > instead of trusting conversation memory. ONE section per phase in `plan.md` —
 > copy the block below for a second phase only if `plan.md` has one.

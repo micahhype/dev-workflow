@@ -150,6 +150,8 @@ dw reopen N
 dw status [--json]                     what SessionStart prints and the dashboard reads
 dw check                               what the Stop hooks would refuse the turn for
 dw import <slug>                       build state.json from a legacy phase-log.md
+
+dw --feature <slug> <command>          act on a feature other than the active one
 ```
 
 Every write takes a lock file, reads, validates, writes to a temporary file, renames
@@ -189,7 +191,7 @@ workaround, where today it takes ticking the box the prompt describes.
 | `status.py` (SessionStart) | parses headings and ticks | prints `dw status`; rewrites the shim |
 | `evidence_guard.py` (Stop) | parses the current phase | same check, on the log rendered from the state |
 | `plan_guard.py` (Stop) | parses `plan.md` and `phase-log.md` | same checks, on the log rendered from the state |
-| `gate.py` (PreToolUse) | guards `.approval-gate` | also denies the edit tools on a feature's `state.json` and on the `phase-log.md` rendered beside it, naming the command to use. Bash is not filtered: this is a signpost for the model, like the rest of the gate |
+| `gate.py` (PreToolUse) | guards `.approval-gate` | also denies the edit tools on a feature's `state.json`, the `phase-log.md` rendered beside it, the prompt stamp and the launcher, naming the command to use. Bash is not filtered: this is a signpost for the model, like the rest of the gate |
 | new `prompt.py` (UserPromptSubmit, UserPromptExpansion) | — | stamps the prompt time; records `/dev-workflow:approve` |
 | `dashboard.py`, `mark_done.py` | parse and rewrite markdown | read the log rendered from `state.json`; Mark done approves every open section in the state, recorded as `via: "marked-done"` |
 

@@ -176,10 +176,14 @@ restates a declaration. The reviewer will flag what you leave, and each finding
 costs a review round.
 
 After implementing:
-- Update the feature's `phase-log.md` for THIS phase. Its checkboxes are parsed by
-  the workflow's hooks, so write them literally, and only the ones that are yours:
-  - Tick `[x] coded` and fill `- Changed:` (files + key decisions).
-  - Fill `- Evidence:` with the real output of what you actually ran — the test
+- Record THIS phase as coded, with one command (never edit `phase-log.md` or
+  `state.json`; they are generated and the hooks refuse the edit):
+  ```
+  .dev-workflow/dw --by coder coded <N> --changed "<files + key decisions>" <<'EOF'
+  <evidence>
+  EOF
+  ```
+  - The evidence is the real output of what you actually ran — the test
     command and its result, `file:line` for the cases you verified. What it must
     prove is the phase's `Done when:` from the brief (the acceptance criteria this
     phase delivers): one artifact per criterion, so "ran the tests" is not enough if
@@ -187,12 +191,14 @@ After implementing:
     caught the criterion being wrong — a type-check, a command run against the real
     thing, a `file:line` where it is now true by construction, one test covering
     several criteria — NOT necessarily a new test each (see Tests below). Never
-    write "looks fine" or leave the placeholder; a Stop hook refuses an empty ledger.
-  - **Do NOT tick `[x] code-reviewed`, `[x] security-scanned`, or `[x] USER
-    APPROVED`.** Those belong to the reviewers and the user. Ticking
-    `code-reviewed` yourself would mark your own code reviewed, which is exactly
-    the check this workflow exists to prevent — and `USER APPROVED` forges the
-    user's sign-off.
+    write "looks fine"; the command refuses empty evidence. After review fixes, put
+    the updated ledger back with `.dev-workflow/dw --by coder set <N> evidence`.
+  - **Run no other `dw` command.** `reviewed` and `approve` belong to the reviewers
+    and the user. Marking your own code reviewed is exactly the check this workflow
+    exists to prevent, and an approval is the user's sign-off, not yours.
+  - If the feature has no `state.json` (the command says so), it is a hand-written
+    log from an older version: tick `[x] coded` and fill `- Changed:` and
+    `- Evidence:` in `phase-log.md` instead, and no other box.
 - Run existing tests/build if a command is available; report results honestly. If
   they fail, say so — a red suite reported as green is worse than no suite.
 

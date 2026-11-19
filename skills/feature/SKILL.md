@@ -1,5 +1,6 @@
 ---
 name: feature
+allowed-tools: Bash(.dev-workflow/dw *), Bash(python3 "${CLAUDE_SKILL_DIR}/../../hooks/dw.py" *)
 description: Orchestrate a full spec-driven feature workflow — establish project context, clarify the request into acceptance criteria, size the work, research, solution options, plan, phased implementation with per-phase reviews, and a final audit. Handles bug fixes too (`--bug`, or any request reporting something broken): reproduce, root-cause, regression. Learns across features: proposes rules for conventions.md from review findings and the user's own post-ship edits. Machinery scales to the size of the change. Domain-agnostic. Stops for user approval at every checkpoint.
 ---
 
@@ -14,7 +15,8 @@ conversation with the user; you don't do the rest yourself.
   `project-map.md` at the repo root, and per-feature `spec.md` / `plan.md` /
   `phase-log.md` in the active feature dir `.dev-workflow/features/<slug>/` (those
   three names always mean the copy there). Write decisions to files as you go;
-  re-read if unsure.
+  re-read if unsure. Progress itself lives in `state.json` beside them and changes
+  only through the `dw` command; `phase-log.md` is rendered from it.
 - `conventions.md` says HOW code is written here; `project-map.md` says WHAT
   already exists and where. Never plan a feature without knowing what the project
   already does — from the map, or from the survey when there is no map. An agent
@@ -26,38 +28,44 @@ conversation with the user; you don't do the rest yourself.
   already broken — switches Stage 0.5 to its **Bug mode** branch. Nothing else in
   the workflow changes: same tiers, same phases, same hooks, same checkpoints.
 
-## The phase-log checkboxes are MACHINE-PARSED — write them literally
+## Progress changes through `dw` — never by editing `phase-log.md`
 
-`phase-log.md` is not just prose for humans. The hooks parse it with regexes, and
-the exact strings below are load-bearing. Keep every phase section in the shape
-`templates/phase-log.md` defines; a phase you write up in freeform prose is a phase
-the safety hooks cannot see, and they fail SILENTLY when they can't see it.
+A feature's progress is `state.json`; `phase-log.md` is rendered from it after every
+change, and the hooks refuse an Edit to either. Every change is one command:
+`.dev-workflow/dw <command>`. It validates the step and refuses with the reason — a
+phase cannot be reviewed before it is coded, or approved without evidence and a review
+map. Long text goes on stdin (`<<'EOF' … EOF`) or `--file <path>`.
 
-| String | Who writes it | When | What reads it |
-|---|---|---|---|
-| `## Phase N — <title>` | you | at scaffold | all hooks — a heading that doesn't start with `## Phase` or `## Final review` (case-insensitive) is not a section, and its content is absorbed into the phase above |
-| `[x] coded` | the `coder` (you, in a trivial phase) | when it finishes implementing | — |
-| `- Evidence: <cited proof>` | the `coder` (you, in a trivial phase) pre-fills what it RAN (test/command output); you AUGMENT with what the reviewers verified | coder on return, you after reviews, before yielding | the Stop evidence gate — an empty or placeholder ledger is refused |
-| `[x] code-reviewed` (Final review uses `full code review`) | you | after `code-reviewer` returns AND its findings are resolved | **the Stop evidence gate** — ticking either string ARMS it: from here on, ending your turn with an empty `- Evidence:` line is blocked |
-| `[x] security-scanned` | you | after `code-reviewer` returns its `Security pass:` line and the security findings are resolved — every phase | — |
-| `[x] USER APPROVED` | **you, but ONLY after the user actually said so** | at the approval checkpoint | `status.py`, and the evidence gate's "which phase is current" logic |
+**Wherever this skill names a line of the phase log — `[x] coded`, `- Evidence:`,
+`- Review map:`, `- Lessons:` — it means the field below, written with its command.**
 
-The `coder` owns `[x] coded` and the first draft of `- Evidence:` because it is the
-one that ran the code. Everything a REVIEW or the USER attests to is yours: the
-review boxes, the augmented evidence, and `USER APPROVED`. The coder must never tick
-a review box or `USER APPROVED` — see `agents/coder.md`. In a trivial phase you are
-the coder: you tick `[x] coded` and draft `- Evidence:`, and the review boxes still
-wait on a freshly spawned reviewer.
+| What | Command | Who runs it |
+|---|---|---|
+| The phase list, once the plan is approved | `dw phases "<title>" ["<title>" …]`; a phase added later: `dw add-phase "<title>"` | you |
+| `[x] coded`, `- Changed:`, first `- Evidence:` | `dw --by coder coded N --changed "<files + key decisions>"`, evidence on stdin | the `coder`; you in a trivial phase (without `--by coder`) |
+| A fix round starts | `dw round N` — before you send BLOCKING findings back; this is what counts `- Review rounds:` | you |
+| `[x] code-reviewed`, `[x] security-scanned`, `- Review map:` | `dw reviewed N --security`, the review map on stdin: the totals line, then one `MUST` / `SKIM` / `SKIP` / `ASSUME` entry per line | you, once the findings are resolved |
+| `- Evidence:` (the full ledger, rewritten), `- Code review result:`, `- Unresolved:`, `- Deferred nits:`, `- Over budget:`, `- User notes:` | `dw set N evidence` / `review_result` / `unresolved` / `deferred_nits` / `over_budget` / `user_notes`, text on stdin | you |
+| `- Project map updated:`, `- Lessons:`, `- Post-ship reviewed:` | `dw set feature project_map` / `lessons` / `post_ship_reviewed` | you |
+| `[x] USER APPROVED` | the user types `/dev-workflow:approve`; or, when they approve in plain words, `dw approve N --said "<their words>"` | **the user** — you only relay |
+| The user wants changes after the review | `dw reopen N`, then fix, review and `dw reviewed N` again | you |
+| What is still missing / where things stand | `dw check` · `dw status` | anyone |
 
-`[x] USER APPROVED` is the one box you must never tick on your own initiative. No
-hook can tell your tick from the user's — writing it without an explicit approval
-from the user forges their sign-off, advances the phase, and switches the evidence
-gate to the NEXT phase. If you are unsure whether they approved, they did not: ask.
+The final review of a multi-phase feature is phase `final` in every command.
 
-Tick each box as its step completes, not in a batch at the end — the gate can only
-protect a phase it knows has been reviewed.
+**You never approve.** A bare `dw approve` refuses inside Claude Code, and a relayed
+one is refused unless the user has sent a message since the phase was reviewed — so
+present the review, stop, and wait. If you are unsure whether they approved, they did
+not: ask. A project set to `direct` approvals accepts only `/dev-workflow:approve`.
 
-## `plan.md` has a machine-checked contract too
+The `coder` owns `coded` and the first draft of the evidence because it ran the code.
+Everything a REVIEW attests to is yours. Run each command as its step completes, not
+in a batch at the end: the guards can only protect a phase they know has been reviewed.
+
+**A feature without `state.json`** was started on an older version. Before continuing
+it, run `.dev-workflow/dw import <slug>`; its hand-written log is kept beside the new
+one as `phase-log.legacy.md`.
+
 
 The plan guard (`hooks/plan_guard.py`, a `Stop` hook) refuses to let a turn end
 while any of these is missing. It cannot judge whether a reason is GOOD — that is
@@ -69,21 +77,24 @@ the user's call at the plan checkpoint — only whether you made the choice sile
 | `- Size:` | every drafted phase, while the PR cap is on | The sizes are what show whether the feature fits in one PR; a plan without them would skip the cap. |
 | `## PRs` or `- Over cap:` | `plan.md`, when the phases' `- Size:` total is over the PR cap (`pr_cap` in `.dev-workflow/plan-guard.json`, default 300, `0` = off) | A diff past the cap gets skimmed, not reviewed. Each `### PR N` lists its `- Phases:`; every phase sits in one PR, and a PR over the cap carries its own `- Over cap:` reason. |
 | `- Why separate:` | every phase AFTER the first | Each extra phase costs the user an implement-review-approve round-trip. Splitting stays allowed; splitting without naming why does not. |
-| `- Unresolved:` | any `phase-log.md` phase whose `- Review rounds:` exceeds 2 | Going past the budget means coder and reviewer did not converge — that is a decision for the USER, and the extra rounds must not pass silently. |
-| `- Project map updated:` | the LAST section of a finished feature, when the project has a `project-map.md` | Stage 5 is what maintains the map — and single-phase features skip Stage 5, which is now most of them. `"no structural change"` is a complete answer; saying nothing is not. |
-| `- Lessons:` | the LAST section of a finished feature | Stage 6 is where the workflow learns, and it runs when everyone wants to be done. `"none"` is a complete answer; skipping the step is not. |
+| `unresolved` | any phase that took more than 2 review rounds — `dw reviewed` refuses without it | Going past the budget means coder and reviewer did not converge — that is a decision for the USER, and the extra rounds must not pass silently. |
+| `project_map` | a finished feature, when the project has a `project-map.md` | Stage 5 is what maintains the map — and single-phase features skip Stage 5, which is now most of them. `"no structural change"` is a complete answer; saying nothing is not. |
+| `lessons` | a finished feature | Stage 6 is where the workflow learns, and it runs when everyone wants to be done. `"none"` is a complete answer; skipping the step is not. |
 
 Until a phase has a real `- Scope:`, the plan is still the untouched scaffold and
 the guard stays silent — Stages 0.5–2 legitimately end turns with no plan written.
 
 ## Setup — feature workspace
 1. Derive a short kebab-case `slug` (e.g. `wallet-topup`).
-2. Create `.dev-workflow/features/<slug>/` and scaffold `spec.md`, `plan.md`,
-   `phase-log.md` — copy from the plugin's `templates/` if reachable, else create
-   them with the standard sections.
-3. Write `<slug>` to `.dev-workflow/active` (the status hook and
-   `/dev-workflow:status` read this). Switch active features by updating this file;
-   multiple can coexist.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../hooks/dw.py" new <slug> "<feature title>"`.
+   It creates `.dev-workflow/features/<slug>/` with `state.json` and the rendered
+   `phase-log.md`, makes the feature active (`.dev-workflow/active`; several can
+   coexist, switch by rewriting that file), and writes the `.dev-workflow/dw` launcher
+   every later command uses.
+3. Scaffold `spec.md` and `plan.md` in that directory — copy from the plugin's
+   `templates/` if reachable, else create them with the standard sections.
+4. Once the tier is known (Stage 0.8) nothing more is needed here; once the plan is
+   approved (Stage 3), record its phases with `dw phases`.
 
 ## Model routing — per-agent, user-overridable
 Each agent has a sensible default model in its `agents/*.md` frontmatter (Opus
@@ -357,6 +368,7 @@ Reads, not a subagent.
    other review loop: at most 2 rounds with the reviewer, then decide or take the
    disagreement to the user (see the review-round rules in Stage 4).
 4. **CHECKPOINT: present the plan, stop, get approval or edits before any code.**
+   When it is approved, record the phases: `dw phases "<title>" ["<title>" …]`.
    Lead with the shape — tier, PR count, phase count, estimated files/lines — so the
    user can say "that's too much machinery for this" BEFORE paying for it. If you
    cut the plan down in step 2, say what you cut.
@@ -369,8 +381,8 @@ standard one that merely ended with one phase does not. First Read
 "Tests" section, and follow it as the coder would: `conventions.md` and the
 project's formatter/linter, scope, prefer what exists, the clean-code and
 readability rules, the agreed `## Structure`, comments, tests, and run the
-tests/build and report honestly. Then tick `[x] coded`,
-fill `- Changed:` and pre-fill `- Evidence:`; anything extra goes to the user as
+tests/build and report honestly. Then run `dw coded N` with what changed and the
+evidence you ran; anything extra goes to the user as
 `Suggested, not built:`. Fix rounds are yours, scoped to the findings; reviewers stay
 freshly spawned; `models.coder` does not apply to these phases.
 
@@ -416,45 +428,45 @@ For each phase in `plan.md`, in order:
    nothing sensitive the pass is one line naming what was checked. It catches LOCAL
    bugs while they are cheap to fix (injection, hardcoded secrets, missing authz on a
    new endpoint); EMERGENT, cross-phase vulnerabilities are Stage 5's `security-audit`.
-3. Summarize the review that ran for the user. Update `phase-log.md` — using the
-   LITERAL checkbox strings from the table above, which the hooks parse. The coder
-   (or you, in trivial) already ticked `[x] coded` and pre-filled `- Evidence:` with
-   what it ran; your job here is the review boxes and evidence:
-   - If the reviewer found BLOCKING issues, have `coder` fix them (fix them yourself
-     in trivial), then re-review — **under the round budget below. Count the rounds; do
+3. Summarize the review that ran for the user, and record it with `dw`. The coder
+   (or you, in trivial) already ran `dw coded` with what it ran; your job here is the
+   review and the evidence:
+   - If the reviewer found BLOCKING issues, run `dw round N`, have `coder` fix them
+     (fix them yourself in trivial), then re-review — **under the round budget below. Count the rounds; do
      not loop until they agree.**
-   - Tick `[x] code-reviewed` and `[x] security-scanned` once `code-reviewer`'s
-     findings, its `Security pass:` ones included, are resolved.
+   - Run `dw reviewed N --security` once `code-reviewer`'s findings, its
+     `Security pass:` ones included, are resolved.
      "Resolved" means fixed, rebutted with evidence you accepted (never your own
      rebuttal in a phase you coded), or decided by the user at escalation — never
      "we ran out of rounds".
-   - Record the **`- Review map:`** in the phase's section: the first round's map,
+   - Give `dw reviewed` the **review map** on stdin: the first round's map,
      with each re-review's fix-diff entries merged in (a hunk changed by a fix is
      re-tiered, never left at a lower tier than the fix warrants). Replace the
      reviewer's line counts in the opening line with `git diff --numstat` totals.
-     Keep the tier labels and one-line entries: the plan guard requires a MUST /
-     SKIM / SKIP entry before you yield, and the dashboard renders them.
+     Keep the tier labels and one-line entries: `dw reviewed` refuses a map with no
+     MUST / SKIM / SKIP entry, and the dashboard renders them.
    - If the plan guard reported the diff **over its `- Size:` budget**, split the
-     rest into a new phase or write why it lands together on `- Over budget:`.
-   - Record `- Review rounds: N/2`, `- Unresolved:` and `- Deferred nits:` in the
-     phase's section (prose lines, not parsed by the hooks — they exist so the user
-     can see how contested the phase was, and what was consciously let go, before
-     approving it).
-   - **Augment the `- Evidence:` ledger** so it carries CITED proof it works:
+     rest into a new phase (`dw add-phase`) or say why it lands together
+     (`dw set N over_budget`).
+   - Record `review_result`, `unresolved` and `deferred_nits` with `dw set N` — they
+     let the user see how contested the phase was, and what was consciously let go,
+     before approving it. The round count is kept by `dw round`.
+   - **Augment the evidence ledger** (`dw set N evidence`, the whole ledger again) so
+     it carries CITED proof it works:
      test/command output, `file:line` refs, concrete cases verified — one artifact
      per acceptance criterion this phase delivers (`spec.md` section 1b), no
      "looks fine". **An artifact is not the same thing as a new test** — see below.
-     Ticking `[x] code-reviewed` arms the
-     `Stop`-hook evidence gate: it will refuse to let you yield for approval while
-     this line is still empty or a placeholder, and it will keep refusing.
+     A reviewed phase with an empty ledger cannot be approved, and the `Stop`-hook
+     evidence gate refuses to let you yield for approval while it is empty.
 4. **CHECKPOINT: the user reviews AFTER the AI. Stop and wait.** Lead with the
    review map, so the user reads 40 lines instead of 400: the totals line, any
    `- Over budget:` reason, the MUST entries in reading order with their questions,
    then every ASSUME. SKIM and SKIP go in one line each with counts. Do not paste the
    diff; the user opens the MUST ranges (or the dashboard shows them). Then the review
-   summary and evidence. ONLY after the user
-   has actually approved, tick `[x] USER APPROVED` in `phase-log.md` and move on.
-   Never tick it yourself to advance; never advance unapproved.
+   summary and evidence. Tell the user they can approve with
+   `/dev-workflow:approve` or in their own words. When they approve in words, relay it:
+   `dw approve N --said "<their words>"`. If they ask for changes, record them with
+   `dw set N user_notes` and `dw reopen N`. Never advance unapproved.
 5. **Commit.** With a `## PRs` section, follow `pr-slicing.md`: commit per PR on
    `<slug>/pr-<N>` once its last phase is approved; never push. Without `## PRs`: if
    it's a git repo and the user wants per-phase commits, commit scoped to this phase
@@ -497,9 +509,9 @@ finding things because finding things is its job, and each new round re-opens co
 the last round already settled. Nothing in the loop ends it, so you end it.
 
 **A round is spent only on a BLOCKING finding.** Round 0 with no BLOCKING finding
-is zero rounds: tick the review boxes, put the nits on `- Deferred nits:` and show
+is zero rounds: run `dw reviewed N`, put the nits in `deferred_nits` and show
 them at the checkpoint. The user picks which to apply; a nit fix of a line or two (a
-rename, a wording change) needs no re-review, and `- Review rounds:` stays `0/2`.
+rename, a wording change) needs no re-review and no `dw round`.
 When a round does run for a BLOCKING finding, the nits may ride along in the same
 fix. There are two labels, BLOCKING and NIT — a reviewer's "should-fix" is BLOCKING
 if it changes behaviour a real caller can reach, otherwise a NIT.
@@ -530,7 +542,7 @@ fixes → re-review is round 1. One more if needed is round 2. There is no round
   user: the finding, the coder's rebuttal, your recommendation, and options — apply
   the reviewer's fix / accept the coder's position / ship it with the risk recorded
   in `- Unresolved:` / something else. This is a checkpoint like any other: you do
-  not resolve a deadlock by ticking `[x] code-reviewed` yourself, and you do not
+  not resolve a deadlock by running `dw reviewed` yourself, and you do not
   quietly drop the finding.
 - The budget bounds ARGUMENT, not correctness. A finding the coder agrees with and
   fixes cleanly isn't a round spent debating — but if fixing it keeps failing, that
@@ -546,16 +558,10 @@ Stage 3, and the final review and audit in Stage 5.
 trivial feature is single-phase by definition; a standard one often ends up there
 after the Stage 3 re-check, and it skips this stage too.
 
-**If you SKIP this stage, DELETE the `## Final review` section from `phase-log.md`.**
-The template always scaffolds that section, but nothing ever ticks it when the stage
-is skipped — and `status.py` reports the first unapproved section as the current one,
-so the finished feature is reported as stuck on "Final review" forever. Removing the
-section is what marks the feature done. Skipping the stage does NOT skip the map update
-below: if the change added a capability or moved something, `project-map.md` still
-gets its line at the phase's approval checkpoint — and since you are deleting the
-Final review section that normally carries `- Project map updated:` and
-`- Lessons:`, write both lines on the LAST PHASE instead, and run Stage 6 at that
-phase's approval checkpoint. The plan guard requires them there.
+A single-phase feature has no final review in its state, so there is nothing to
+remove. Skipping the stage does NOT skip the map update below or Stage 6: both run at
+the phase's approval checkpoint, and the plan guard requires `project_map` (when the
+project has a map) and `lessons` on a finished feature.
 
 **More than one phase:** read `${CLAUDE_SKILL_DIR}/references/final-review.md` and run
 it — cross-phase `code-reviewer` plus `security-audit`, the same 2-round budget, then a
@@ -574,8 +580,8 @@ built — this is how project knowledge accumulates instead of being re-derived:
 At the final checkpoint — Stage 5's, or the last phase's when Stage 5 is skipped —
 read `${CLAUDE_SKILL_DIR}/references/lessons.md` and run it: at most three rule
 proposals for `conventions.md` in ONE `AskUserQuestion` (nothing worth proposing is
-the common outcome — then say so and ask nothing), the result on the last section's
-`- Lessons:` line (the plan guard requires it; `"none"` is a complete answer), then
+the common outcome — then say so and ask nothing), the result recorded with
+`dw set feature lessons` (the plan guard requires it; `"none"` is a complete answer), then
 the ship point. The same file holds **Post-ship edits**, which Stage 0 runs. Its
 commands use `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py"`.
 

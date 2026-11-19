@@ -29,8 +29,8 @@ when Stage 5 is skipped. It is one question to the user, not a retrospective.
 4. **Write the approved ones** to the `## Learned rules` section of `conventions.md`
    (create the section above "Domain-specific correctness rules" if it is missing).
    If it passes ~15 lines, propose merging or dropping the weakest in the same
-   question rather than growing it. Record the outcome on the last section's
-   `- Lessons:` line — the rules added, or "none". The plan guard requires the line.
+   question rather than growing it. Record the outcome — the rules added, or "none" —
+   with `dw set feature lessons`. The plan guard requires it.
 5. **Record the ship point** (git repos only), after the user signs off:
    `python3 <checkpoint.py> ship <slug>`. It stores
    the tree as it was handed over, which is what "Post-ship edits" diffs against.
@@ -54,5 +54,7 @@ section has no `- Post-ship reviewed:` line:
 3. Turn what generalises into rule proposals exactly as in steps 2–4 above, in one
    `AskUserQuestion` — or none, which is common. Keep it quick; the user came here
    to start a new feature.
-4. Write `- Post-ship reviewed: <date> — <rules added | no user edits | none
-   generalised>` on that feature's last section, so it is never asked about twice.
+4. Record `<date> — <rules added | no user edits | none generalised>` so it is never
+   asked about twice: `dw --feature <slug> set feature post_ship_reviewed`. A feature
+   with no `state.json` gets a `- Post-ship reviewed:` line on the last section of its
+   hand-written `phase-log.md` instead.
