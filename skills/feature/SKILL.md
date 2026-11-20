@@ -595,4 +595,4 @@ commands use `python3 "${CLAUDE_SKILL_DIR}/../../hooks/checkpoint.py"`.
   for, and why the analyst role is yours and can never be delegated to a subagent.
 - Reviewers are read-only with fresh context and always freshly spawned, so they
   judge code they didn't write — the `coder`'s, or yours in a trivial phase.
-- For a hard-enforced approval gate, see the `.approval-gate` hook in the README.
+- For a hard-enforced approval gate, see the `.approval-gate` hook in `docs/guards.md`.
