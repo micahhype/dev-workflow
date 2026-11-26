@@ -5,6 +5,14 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **A tier signal that matches decides the tier.** The orchestrator ran a feature that added a
+  command as trivial because its design looked obvious, which skipped the architect and the
+  plan-reviewer. A matching signal now sets the tier; going lighter needs your yes first.
+  Collapsing a plan's phases still needs no permission.
+
 ## [0.27.0] - 2026-11-26
 
 ### Changed

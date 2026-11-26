@@ -134,11 +134,12 @@ researcher to skip the web work and return the survey only, and say so to the us
      cannot work without them. Things that are merely a good idea go to the user as
      a suggestion, or into `spec.md` section 5 as a non-goal. They do not get
      planned in silently.
-2. **Re-check the tier now.** The plan is the first point where the size is real
+2. **Re-check the size now.** The plan is the first point where the size is real
    rather than guessed. If it came out smaller than the Stage 0.8 estimate,
-   collapse the phases and drop the machinery the lighter tier doesn't run — then
-   tell the user you scaled it down. This is the cheapest correction available in
-   the whole workflow, and it is the one most often skipped.
+   collapse the phases — then tell the user you scaled it down. This is the cheapest
+   correction available in the whole workflow, and it is the one most often skipped.
+   The tier stays where its signal put it: the `plan-reviewer` and the `coder` still
+   run unless the user agreed to a lighter tier (Stage 0.8).
 3. **Adversarial plan review**: spawn
    the `plan-reviewer` subagent on the drafted `plan.md`, handing it the
    existing-implementation survey, the map excerpts, and your diff estimate. It

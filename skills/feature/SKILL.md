@@ -202,24 +202,35 @@ quick read of the files involved: how many files, roughly how many lines, one
 subsystem or several. Say the estimate out loud to the user along with the tier. An
 estimate you refuse to make is how a small change ends up on the heavy path.
 
-**A feature is TRIVIAL by default.** Moving up a tier requires you to NAME the signal
-that puts it there. "It feels like a real feature" is not a signal — most requests
-feel like real features and most of them are twenty lines.
+**A feature is TRIVIAL when no signal in the table matches.** Moving up a tier
+requires you to NAME the signal that puts it there. "It feels like a real feature"
+is not a signal — most requests feel like real features and most of them are twenty
+lines.
 
-| Tier | It is this tier only if you can name one of these | What actually runs |
+**A signal that matches decides the tier.** The signals are tests, not weights: a
+change that adds a command is standard, however obvious its design looks and however
+few lines it takes. "There is one obvious way to build it" is not a reason to run
+below a signal — the architect and the plan-reviewer exist to check exactly that
+belief. If you think a lighter tier is enough anyway, ask first: tell the user which
+signal matched and why you would go lighter, and take the lighter path only on their
+yes. Never decide it yourself and announce it.
+
+| Tier | It is this tier when | What actually runs |
 |---|---|---|
-| **trivial** | *(default)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | the **Trivial path** below: survey → one inline proposal the user approves → **1 phase**, coded by you (no `coder`) → `code-reviewer` (logic + security pass) → your approval. **No researcher, no architect, no plan-reviewer, no Stage 5.** |
+| **trivial** | *(no signal below matches)* one subsystem, one reviewable diff, no new interface, no new dependency, no new persistent state — a validation rule, an added field, a config value, a bug fix, a new parameter with a default | the **Trivial path** below: survey → one inline proposal the user approves → **1 phase**, coded by you (no `coder`) → `code-reviewer` (logic + security pass) → your approval. **No researcher, no architect, no plan-reviewer, no Stage 5.** |
 | **standard** | a new interface others will call (endpoint, command, screen, public function), OR new persistent state/schema, OR several files across one subsystem | survey, plus external research **only if there is a real external question** → one fit-first architect → plan + `plan-reviewer` → phases → Stage 5 only if the plan ended up with more than one phase |
 | **complex** | crosses a subsystem or trust boundary, OR changes a data model other code depends on, OR the design itself is security-sensitive, OR wide blast radius | full machinery — two independent fit-first architects, full final audit |
 
 **For a bug, the root cause sets the tier, not the severity of the symptom** — see
 `bug-mode.md`.
 
-**Re-check the tier after the plan is drafted, and DOWNGRADE without ceremony.** This
+**Re-check the size after the plan is drafted, and collapse without ceremony.** This
 estimate is a guess; the plan is when you actually know. If the work turned out to be
 one small diff, collapse it: drop the remaining phases into one, skip Stage 5, and
-tell the user you scaled it down and why. Downgrading needs no permission. Upgrading
-does: name the signal and tell the user before you spend their time on it.
+tell the user you scaled it down and why. Collapsing phases needs no permission.
+Changing tier does: going below a signal that still matches needs the user's yes, as
+above, and going up means naming the signal and telling the user before you spend
+their time on it.
 
 The tier scales research and the number of architects — NOT security coverage:
 `code-reviewer` runs every phase in every tier, security pass included. Nor does it
@@ -260,9 +271,9 @@ are in `${CLAUDE_SKILL_DIR}/references/`; the pattern catalog is
 approved and its phases recorded with `dw phases`, continue at Stage 4.
 
 ## Stage 4 — Phased implementation (loop per phase)
-**Trivial tier: you write the code yourself — no `coder` spawn.** Use the tier as
-it stands after Stage 3's re-check: a feature downgraded to trivial counts; a
-standard one that merely ended with one phase does not. First Read
+**Trivial tier: you write the code yourself — no `coder` spawn.** This means a
+feature whose tier IS trivial — no signal matched, or the user agreed to run it
+lighter. A standard one that merely ended with one phase goes to the `coder`. First Read
 `${CLAUDE_SKILL_DIR}/../../agents/coder.md` once, from "While coding:" through its
 "Tests" section, and follow it as the coder would: `conventions.md` and the
 project's formatter/linter, scope, prefer what exists, the clean-code and
