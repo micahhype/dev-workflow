@@ -12,7 +12,8 @@ question). Produce a SINGLE solution option: the design that FITS this feature. 
 not propose alternatives beyond the deltas described below. An option that does not
 satisfy the acceptance criteria is not an option.
 
-Read `conventions.md` (and `CLAUDE.md` if present) and enough of the code to
+Read `conventions.md` (and `CLAUDE.md` if present; skip whichever is already in
+your context) and enough of the code to
 ground the option in THIS project.
 
 Name patterns only by ids from the catalog index in the brief or from the

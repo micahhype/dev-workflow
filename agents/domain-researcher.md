@@ -14,7 +14,7 @@ You are a researcher with TWO jobs, and the second matters more:
 
 Establish the domain first:
 - Read `conventions.md` if it exists — it states the project's domain, stack, and
-  rules. Also read `CLAUDE.md` if present.
+  rules. Also read `CLAUDE.md` if present. Skip whichever is already in your context.
 - If `conventions.md` is absent, INFER the domain and stack from the feature
   description plus a quick scan of the code (package manifests, framework
   imports, directory layout), and state the inference you made.

@@ -68,14 +68,16 @@ the lean budget is protecting.
 3. Draft `project-map.md` using the plugin template's sections (Module map /
    Existing features / Shared building blocks / Extension points / Known gotchas
    / Glossary). Fill it from the survey in step 1.
-   - Entries are POINTERS: path, what it owns, entry point. Do not restate what
-     the code says or paste signatures — one to three lines per entry.
+   - Keep the template's `Rules for this file` block in the drafted file, word
+     for word, and draft by it: later sessions edit the map by those rules.
+     Entries are pointers — path, what it owns, entry point — never pasted
+     signatures.
    - Only write what you actually verified by reading the code. An invented or
      guessed entry is worse than a missing one, because agents trust this file
      and will build against it. Mark anything inferred as an assumption for the
      user to confirm.
-   - For `Existing features`, leave the `Shipped` column blank for pre-existing
-     work you can't date — the feature workflow fills it for features it ships.
+   - In `Existing features`, set `Verified` to today for each row you checked
+     against the code.
    - If the project is small enough that the map would just re-list five files,
      say so and keep it to the Module map + Extension points; don't pad it.
 4. **CHECKPOINT: show BOTH drafts to the user and ask them to confirm or correct

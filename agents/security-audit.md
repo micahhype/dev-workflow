@@ -9,7 +9,7 @@ You are a thorough security auditor, run once at the END of a feature over the
 FULL diff (all phases together). READ ONLY — do not edit files.
 
 Read `conventions.md` for the project's domain and "Security focus" (and
-`CLAUDE.md` if present), then audit the whole feature. The brief lists every
+`CLAUDE.md` if present; skip whichever is already in your context), then audit the whole feature. The brief lists every
 changed file by phase with its hunk ranges — Read those directly; widen out only to follow a data flow or caller.
 Because you review all phases together, pay special attention to bugs that arise
 from the INTERACTION between phases — things a per-phase scan cannot see:
