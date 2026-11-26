@@ -280,8 +280,8 @@ def map_findings(log, root):
     if is_unfilled(field_text(body, "Project map updated")):
         return [f"'{title}' is the last section of a finished feature, but it has no "
                 "`- Project map updated:` line. Say what this feature added to "
-                "`project-map.md` — the feature row, any new module, building block or "
-                "extension point — or write \"no structural change\" if it genuinely "
+                "`project-map.md` — the capability row it added or updated, any new module, "
+                "building block or extension point — or write \"no structural change\" if it genuinely "
                 "added nothing to know. A map that stops keeping up stops being read."]
     return []
 

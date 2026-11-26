@@ -2,7 +2,7 @@
   "_comment": "Optional per-agent model overrides for the dev-workflow feature loop. Copy to .dev-workflow/models.json and edit. Any agent you OMIT keeps the default baked into its agents/*.md frontmatter. Values accept aliases (opus, sonnet, haiku, fable) which track the newest model of that family, or a full model ID (e.g. claude-opus-5-5) to pin a version, plus 'inherit' (use the session's main model). Keys starting with _ are ignored.",
   "domain-researcher": "opus",
   "solution-architect": "opus",
-  "plan-reviewer": "inherit",
+  "plan-reviewer": "opus",
   "coder": "opus",
   "code-reviewer": "opus",
   "security-audit": "opus"

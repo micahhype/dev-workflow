@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`dw diff N`** writes the phase's diff to `.dev-workflow/features/<slug>/phase-N.diff` and
+  prints each changed file with its line counts. The reviewer reads the file; the orchestrator
+  no longer pastes the diff into the brief. `dw diff N --since-review` writes only what changed
+  since the last `dw diff N` (`phase-N.fix.diff`), for a re-review.
+- **Trivial path.** A trivial feature gets one inline proposal and one checkpoint before code,
+  in place of a separate option checkpoint and plan checkpoint. Approval of each phase after its
+  review is unchanged.
+
+### Changed
+- **`project-map.md` describes what exists now, not what shipped when.** `Existing features` has
+  one row per capability; a feature that extends one updates its row, and a bug fix adds none.
+  The `Shipped` column is now `Verified`, the date the row was last checked against the code.
+  Every entry carries its path, and the file has a budget of about 200 lines. These rules sit in
+  a `Rules for this file` block that stays in the map. A map from an older version is brought in
+  line at the next feature's final checkpoint; nothing to run.
+- **Stages 1–3 moved to `skills/feature/references/design-stages.md`.** The standard and complex
+  tiers read it; the trivial tier does not load it.
+- **`plan-reviewer` defaults to `opus`** (was `inherit`), like the other agents. Set
+  `"plan-reviewer": "inherit"` in `.dev-workflow/models.json` to keep the session's model.
+- The orchestrator and the agents skip reading `conventions.md` and `CLAUDE.md` when they are
+  already in context.
+
+### Fixed
+- Stage 5 told the orchestrator both to always append a row to `Existing features` and to write
+  nothing when nothing structural changed.
+
 ## [0.25.0] - 2026-11-19
 
 ### Changed

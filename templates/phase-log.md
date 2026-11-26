@@ -57,7 +57,7 @@
 - Resolution:
 - Review rounds:
 - Unresolved:
-- Project map updated: <what was appended/corrected in project-map.md, or "no
+- Project map updated: <what was added/updated/corrected in project-map.md, or "no
   structural change">
 - Lessons: <rules the user approved into conventions.md "Learned rules", or "none">
 - Evidence: <cited proof for the whole feature — test suite result, validation

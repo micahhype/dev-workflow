@@ -63,7 +63,7 @@ Two scripts run from your own terminal:
 |-------|---------------|------|
 | `domain-researcher` | `opus` | Domain and stack research, plus what the codebase already has |
 | `solution-architect` | `opus` | The option that fits, plus priced leaner and safer deltas |
-| `plan-reviewer` | inherit | Adversarial plan review before coding |
+| `plan-reviewer` | opus | Adversarial plan review before coding |
 | `coder` | `opus` | Implements one phase |
 | `code-reviewer` | `opus` | Logic and quality review plus a security pass, every phase |
 | `security-audit` | `opus` | Deep final audit across all phases |

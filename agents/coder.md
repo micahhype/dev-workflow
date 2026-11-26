@@ -20,7 +20,8 @@ lines that matter here — the building block to reuse, the extension point to h
 into, the gotcha in that module — all inline. Implement from that. Read those exact
 paths directly; don't Grep-walk the tree to find code the brief already points you
 at. On your FIRST phase, read `conventions.md` at the repo root for project domain +
-conventions (and `CLAUDE.md` if present) — once, not again on later phases. Only open
+conventions (and `CLAUDE.md` if present; skip whichever is already in your
+context) — once, not again on later phases. Only open
 `spec.md` / `plan.md` if the inline brief is ambiguous — don't re-read them by
 default; open `project-map.md` yourself only when the brief's excerpt doesn't cover
 the module you're in.
