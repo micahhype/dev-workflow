@@ -68,6 +68,7 @@ Every change goes through one command, `.dev-workflow/dw` (a launcher the plugin
 ```
 dw coded 1 --changed "src/orders/list.ts"     evidence on stdin
 dw round 1                                     a fix round starts
+dw diff 1                                      the phase's diff, written for the reviewer
 dw reviewed 1 --security                       review map on stdin
 dw set 1 unresolved                            text on stdin
 dw approve                                     yours: run it in your own shell

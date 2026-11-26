@@ -8,6 +8,8 @@ import sys
 
 import _workflow
 import approval as approval_rules
+import checkpoint
+import diff_budget
 import evidence_guard
 import legacy
 import plan_guard
@@ -177,6 +179,53 @@ def reopen(root, args):
     return "%s reopened." % named(args.phase)
 
 
+def diff(root, args):
+    """Write the phase's diff where a reviewer without Bash can Read it."""
+    number = target_of(args.phase)
+    if number == workflow_state.FINAL:
+        raise Refused("`dw diff` covers one phase. Brief the final review with the "
+                      "changed files grouped by phase.")
+    workflow_state.section(loaded(root, args), number)
+    if not checkpoint.is_git_repo(root):
+        raise Refused("Not a git repository, so there is no diff to write. Hand the "
+                      "reviewer the changed files and line ranges instead.")
+    directory = chosen_dir(root, args)
+    slug = os.path.basename(directory)
+    head, now = checkpoint.working_tree(root)
+    base, since = diff_base(root, slug, number, head, args.since_review)
+    text, files = diff_budget.patch(root, base, now)
+    if not files:
+        raise Refused("Nothing has changed since %s." % since)
+    name = "phase-%d%s.diff" % (number, ".fix" if args.since_review else "")
+    with open(os.path.join(directory, name), "w", encoding="utf-8") as out:
+        out.write(text + "\n")
+    diff_budget.remember_reviewed(root, slug, number, now)
+    return diff_summary(os.path.join(_workflow.STATE_DIR, "features", slug, name), files, since)
+
+
+def diff_base(root, slug, number, head, since_review):
+    """-> (tree, what it is, in words)."""
+    if since_review:
+        tree = diff_budget.last_reviewed(root, slug, number)
+        if not tree:
+            raise Refused("No earlier `dw diff %d` to compare with. Run it without "
+                          "--since-review." % number)
+        return tree, "the last `dw diff %d`" % number
+    tree = diff_budget.phase_base(root, slug, number)
+    if tree:
+        return tree, "the phase started"
+    return (head or diff_budget.EMPTY_TREE,
+            "HEAD (no phase baseline was recorded, so any earlier uncommitted work is included)")
+
+
+def diff_summary(path, files, since):
+    counted = [(int(a), int(d)) for a, d, _path in files if a.isdigit() and d.isdigit()]
+    lines = ["Wrote %s: %d files, +%d -%d since %s." % (
+        path, len(files), sum(a for a, _d in counted), sum(d for _a, d in counted), since)]
+    lines += ["  +%s -%s  %s" % row for row in files]
+    return "\n".join(lines)
+
+
 def loaded(root, args):
     state = workflow_state.load(chosen_dir(root, args))
     if state is None:
@@ -259,6 +308,7 @@ def parser():
             (["field"], {}), text=True)
     command("approve", approve, (["phase"], {"nargs": "?"}), (["--said"], {}))
     command("reopen", reopen, phase)
+    command("diff", diff, phase, (["--since-review"], {"action": "store_true"}))
     command("status", status, (["--json"], {"action": "store_true"}))
     command("check", check)
     command("import", import_legacy, (["slug"], {}))

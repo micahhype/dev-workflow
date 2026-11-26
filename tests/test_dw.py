@@ -7,6 +7,8 @@ import sys
 from conftest import HOOKS, phase, phase_log, run_hook
 
 sys.path.insert(0, HOOKS)
+import checkpoint  # noqa: E402
+import diff_budget  # noqa: E402
 import legacy  # noqa: E402
 
 TEMPLATE = os.path.join(os.path.dirname(HOOKS), "templates", "phase-log.md")
@@ -243,3 +245,66 @@ def test_another_feature_is_addressed_by_slug(tmp_path):
        stdin="2026-11-19 — no user edits")
     assert saved(tmp_path)["post_ship_reviewed"] == "2026-11-19 — no user edits"
     assert saved(tmp_path, "refunds")["post_ship_reviewed"] is None
+
+
+# --- dw diff: the reviewer reads the phase's diff from a file -----------------
+
+def diff_file(root, name="phase-1.diff"):
+    return root / ".dev-workflow" / "features" / "orders" / name
+
+
+def coded_in_git(root):
+    dw(root, "new", "orders", "Paginate orders")
+    dw(root, "phases", "only")
+    (root / "a.txt").write_text("one\ntwo\n")
+    (root / "new.py").write_text("x = 1\n")
+
+
+def test_diff_writes_the_phase_diff_and_reports_its_size(git_repo):
+    coded_in_git(git_repo)
+    proc = dw(git_repo, "diff", "1")
+    assert proc.returncode == 0, proc.stderr
+    assert "phase-1.diff: 2 files, +2 -0" in proc.stdout and "new.py" in proc.stdout
+    written = diff_file(git_repo).read_text()
+    assert "+two" in written and "+x = 1" in written and ".dev-workflow" not in written
+
+
+def test_diff_starts_from_the_baseline_the_stop_hook_recorded(git_repo):
+    coded_in_git(git_repo)
+    _head, before_phase = checkpoint.working_tree(str(git_repo))
+    diff_budget.save(str(git_repo), {"orders": {"phase": "Phase 1 — only", "base": before_phase,
+                                                 "last": before_phase}})
+    (git_repo / "later.py").write_text("y = 2\n")
+    proc = dw(git_repo, "diff", "1")
+    assert "1 files" in proc.stdout and "since the phase started" in proc.stdout
+    assert "+x = 1" not in diff_file(git_repo).read_text()
+
+
+def test_since_review_writes_only_what_changed_after_the_last_diff(git_repo):
+    coded_in_git(git_repo)
+    dw(git_repo, "diff", "1")
+    (git_repo / "new.py").write_text("x = 2\n")
+    proc = dw(git_repo, "diff", "1", "--since-review")
+    assert proc.returncode == 0, proc.stderr
+    fix = diff_file(git_repo, "phase-1.fix.diff").read_text()
+    assert "+x = 2" in fix and "+two" not in fix
+
+
+def test_since_review_without_an_earlier_diff_is_refused(git_repo):
+    coded_in_git(git_repo)
+    proc = dw(git_repo, "diff", "1", "--since-review")
+    assert proc.returncode == 1 and "without" in proc.stderr
+
+
+def test_diff_with_nothing_changed_is_refused(git_repo):
+    dw(git_repo, "new", "orders", "Paginate orders")
+    dw(git_repo, "phases", "only")
+    proc = dw(git_repo, "diff", "1")
+    assert proc.returncode == 1 and "Nothing has changed" in proc.stderr
+
+
+def test_diff_outside_a_git_repo_is_refused(tmp_path):
+    dw(tmp_path, "new", "orders", "Paginate orders")
+    dw(tmp_path, "phases", "only")
+    proc = dw(tmp_path, "diff", "1")
+    assert proc.returncode == 1 and "Not a git repository" in proc.stderr
