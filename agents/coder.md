@@ -46,7 +46,7 @@ than reading or writing code:
   which ones failed.
 - Lint every touched file in ONE invocation (`eslint a.ts b.ts`), never a loop that
   starts the linter per file. A baseline comparison is two invocations: now, and on
-  the stashed tree.
+  `HEAD` checked out into a temporary `git worktree`.
 - After review fixes, rerun the specs the fixes touch, not the broad suite, unless a
   fix changed shared code.
 
@@ -205,26 +205,36 @@ After implementing:
 
 **Tests — few, and only where they can fail for a real reason.** The evidence
 ledger asks for proof per criterion, and the cheapest proof to manufacture is a new
-test. Resist it: most criteria are proven by the type-checker, the existing suite,
-or one command run against the real thing. Follow `conventions.md`'s Testing
+test. Resist it for a criterion that is a declaration or that the existing suite
+already holds. A criterion about behaviour a user or caller can observe is
+different: it gets a durable test (item 2), because a command you ran once guards
+nothing after you are gone. Follow `conventions.md`'s Testing
 section where the project has one; absent that:
 
 1. **Default: no new test file.** Extend the existing spec for the module you
    changed. A second new test file in one phase needs a reason in your return
    message.
-2. **Write a test only for:** pure logic with real branching (parsing, math,
+2. **Write a test only for:** behaviour a user or caller can observe that a
+   `Done when:` criterion names — tested at the boundary they use it through (the
+   endpoint, the command, the public function), one test for as many criteria as it
+   can hold; pure logic with real branching (parsing, math,
    encoding, a state machine) — plain unit test, no DI, no mocks; a bug's
    regression, seen failing before the fix; behaviour whose correctness lives in
    the store or an external system (atomicity, uniqueness, an index, a
    transaction), proven against the real thing — check `package.json`/lockfile for
    an in-memory server or container harness first. A `jest.fn()` standing in for
    the risky call proves nothing about it.
-3. **Never write:** one test per defensive branch; a test that a module wires up
+3. **See every new test fail once.** Undo the lines it guards with an edit, run that
+   test alone, check it fails for the reason it should, and put the lines back.
+   Name the tests you saw fail in your return message and in the evidence; delete
+   a test you cannot make fail. Never `git stash` or `git checkout` for this or for
+   a baseline: they move every uncommitted change in the tree, the user's included.
+4. **Never write:** one test per defensive branch; a test that a module wires up
    or that DI resolves; a test of vendored or generated code; a test restating a
    declaration (`@Max(100)` rejects 101); a service test whose assertions are on
    what its mocks were called with. Cite the declaration or the type-check in the
    ledger instead, and say you skipped the test.
-4. **Probe, smoke and e2e scripts are scratch.** Run them from a temp dir and paste
+5. **Probe, smoke and e2e scripts are scratch.** Run them from a temp dir and paste
    their output into `- Evidence:`; do not commit them to `src/`, `scripts/` or
    the feature dir unless the brief asks for a reusable script.
 

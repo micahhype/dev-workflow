@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Observable behaviour gets a durable test.** An acceptance criterion about what an endpoint,
+  command, screen or public function does is now held by a test at that boundary; a command run
+  by hand no longer stands in for it. One test may hold several criteria, and a criterion that is
+  a declaration still gets none. The rule is in the Testing contract, the coder's test rules and
+  the reviewer's checks.
+- **Every new test is seen failing once.** The coder undoes the lines a new test guards, runs it,
+  and names the tests it saw fail. A test it cannot make fail is deleted.
+- **The orchestrator runs the test suite itself** before it records a review of a phase the coder
+  wrote. Until now the only test run was the coder's own report.
+
+To get the new Testing contract into a project that already has a `conventions.md`, re-run
+`/dev-workflow:init` or copy the section from `templates/conventions.md`.
+
+### Fixed
+- **The coder no longer reaches for `git stash`.** `coder.md` told it to lint "the stashed tree"
+  for a baseline, and a coder proving a regression test stashed a source file by mistake. It now
+  undoes the fix lines with an edit, and takes a baseline from `HEAD` in a temporary worktree.
+
 ## [0.26.0] - 2026-11-26
 
 ### Added

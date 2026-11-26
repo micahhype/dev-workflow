@@ -328,6 +328,12 @@ For each phase in `plan.md`, in order:
    - If the reviewer found BLOCKING issues, run `dw round N`, have `coder` fix them
      (fix them yourself in trivial), then re-review — **under the round budget below. Count the rounds; do
      not loop until they agree.**
+   - **In a phase the coder wrote, run the project's test command yourself**, once,
+     on the code as it stands after the last fix: the whole suite, in the background
+     with its output saved to a file, and read the summary and any failures from
+     that file. The coder's evidence is its own report and the reviewer has no
+     Bash, so this is the only independent run. Cite it in the ledger. A failure is
+     a BLOCKING finding: `dw round N`.
    - Run `dw reviewed N --security` once `code-reviewer`'s findings, its
      `Security pass:` ones included, are resolved.
      "Resolved" means fixed, rebutted with evidence you accepted (never your own
@@ -377,11 +383,19 @@ x.spec.ts:123, criterion 2 → :135` is that failure, not rigour.
   type-check or build that could not have passed otherwise, a command run against
   the real thing with its output, a `file:line` where the constraint now holds by
   construction, a log line from a real run, one test covering several criteria.
-  Cite the cheapest one that would actually fail.
+  Cite the cheapest one that would actually fail — except for a criterion about
+  behaviour a user or caller can observe, where the artifact is a durable test.
 - **Test budget.** Default is NO new test file per phase: extend the changed
-  module's existing spec. A test is written only for pure logic with real branching,
-  a bug's regression, or store-level behaviour proven against the real store. More
-  test lines than code lines in a phase is a signal to cut.
+  module's existing spec. A test is written only for behaviour a user or caller can
+  observe that a criterion names (at the boundary they use it through, one test for
+  as many criteria as it can hold), pure logic with real branching, a bug's
+  regression, or store-level behaviour proven against the real store. More test
+  lines than code lines in a phase is a signal to cut.
+- **A command run by hand is not a guard.** It proves observable behaviour today
+  and nothing tomorrow, so the project keeps a test for it. The run still belongs
+  in the ledger, beside the test.
+- **Every new test was seen failing once**, with the behaviour it guards broken —
+  by the coder, or by you in a trivial phase. The ledger names those tests.
 - **A criterion satisfied by a declaration** (a validator annotation, a schema field,
   a config value, a type) gets NO test — one would only restate it. Cite the
   declaration and the type-check, and say in the ledger which criterion you skipped

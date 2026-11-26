@@ -85,8 +85,11 @@ Focus on:
     `findOneAndUpdate` cannot prove "never yields a duplicate", and stays green
     after the real atomic operator is deleted. Faking a collaborator to INJECT an
     otherwise unreachable error is legitimate.
-  - **Missing** only when: pure logic with real branching has no test, a bug fix
-    has no regression seen failing first, or a criterion has no artifact at all.
+  - **Missing** only when: a `Done when:` criterion about behaviour a user or caller
+    can observe has no durable test at the boundary they use it through (a command
+    run by hand in the evidence does not count), pure logic with real branching has
+    no test, a bug fix has no regression seen failing first, or a criterion has no
+    artifact at all.
     Do not ask for a test of a case you would not flag as reachable above.
   - A subject built by position out of `as any` blanks — a hook denies the crude
     form; flag the rest.

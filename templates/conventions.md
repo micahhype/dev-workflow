@@ -52,6 +52,13 @@ open only when a task needs them. (This note stays; the guidance blockquotes go.
   stands in for the risky call proves nothing about it and reports it as covered.
   Faking a collaborator to INJECT an otherwise unreachable failure is fine.
 - Pure logic gets a plain unit test: no DI, no mocks.
+- Behaviour a user or caller can observe — an acceptance criterion about what an
+  endpoint, a command, a screen or a public function does — is held by a durable
+  test at that boundary. One test may hold several criteria. A command run by hand
+  proves the behaviour today and guards nothing tomorrow, so it does not replace
+  the test.
+- Every new test is seen failing once, with the behaviour it guards broken, before
+  it counts. A test nobody has seen fail may be unable to.
 - Nothing else gets a test. A behaviour that is a declaration — a validator
   annotation, a schema field, a config constant, a type — is already enforced by
   the type-checker, the linter or the framework; a test restating it cannot fail.

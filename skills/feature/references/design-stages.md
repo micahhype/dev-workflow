@@ -98,8 +98,10 @@ researcher to skip the web work and return the survey only, and say so to the us
      cover every criterion, and a criterion no phase delivers is a missing phase.
      Name the proof, not a test count: for a criterion a declaration or the
      type-checker already enforces, the honest plan says so instead of budgeting a
-     test that can only restate it (see "One artifact per criterion is NOT one test
-     per criterion" in the feature skill's Stage 4).
+     test that can only restate it; for a criterion about behaviour a user or
+     caller can observe, the proof is a durable test at the boundary they use it
+     through (see "One artifact per criterion is NOT one test per criterion" in the
+     feature skill's Stage 4).
    - **Each phase has a rollback point.** Note where the checkpoint sits so a bad
      phase can be reverted cleanly (ties into the checkpoint/rollback machinery).
    - **Each phase has a `- Size:` — its diff budget.** Changed lines (added +
